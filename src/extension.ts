@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { IstariMCPServer } from './mcp-server';
 import { IstariUI } from './istari_ui';
 import { startLSP } from './istari_lsp';
-import { istariUIs, mcpServer, setMcpServer, getIstari } from './global';
+import { istariUIs, mcpServer, setMcpServer, getIstari, registerIstari } from './global';
 
 
 
@@ -10,26 +10,17 @@ function registerDoc(doc: vscode.TextDocument, editor: vscode.TextEditor | undef
 	if (doc.languageId === "istari") {
 		if (!istariUIs.has(doc)) {
 			const ui = new IstariUI(doc);
-			istariUIs.set(doc, ui);
+			registerIstari(doc, ui);
 
 			// Auto-start MCP server if it doesn't exist yet
 			if (!mcpServer) {
 				startMcpServer();
-			}
-
-			// Set active context in MCP server
-			if (mcpServer) {
-				mcpServer.setActiveContext(doc, ui, ui.terminal);
 			}
 		} else {
 			if (editor) {
 				let ui = istariUIs.get(doc);
 				if (ui) {
 					ui.setEditor(editor);
-					// Update active context in MCP server if it exists
-					if (mcpServer) {
-						mcpServer.setActiveContext(doc, ui, ui.terminal);
-					}
 				}
 			}
 			// Webview is only revealed on first creation, not on repeated selections
@@ -46,13 +37,7 @@ function startMcpServer() {
 		setMcpServer(newServer);
 
 		// Set active context if there's an active Istari document
-		const activeEditor = vscode.window.activeTextEditor;
-		if (activeEditor && activeEditor.document.languageId === "istari") {
-			const ui = istariUIs.get(activeEditor.document);
-			if (ui) {
-				newServer.setActiveContext(activeEditor.document, ui, ui.terminal);
-			}
-		}
+		// MCP server will automatically use global state, no need to set context
 
 		newServer.start().then(() => {
 			console.log(`Istari MCP HTTP server started on port ${port}`);

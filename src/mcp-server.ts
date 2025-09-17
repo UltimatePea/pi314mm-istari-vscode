@@ -8,29 +8,14 @@ import {
   McpError
 } from '@modelcontextprotocol/sdk/types.js';
 import * as vscode from 'vscode';
-import { IstariTerminal } from './istari_terminal';
-import { IstariUI } from './istari_ui';
-
-interface IstariMCPState {
-  activeDocument?: vscode.TextDocument;
-  activeUI?: IstariUI;
-  activeTerminal?: IstariTerminal;
-  documents: Map<string, vscode.TextDocument>;
-  uis: Map<string, IstariUI>;
-  terminals: Map<string, IstariTerminal>;
-}
-
+import { IstariDocument, getActiveIstariDocument, getIstariDocumentByUri, istariDocuments } from './global';
 
 export class IstariMCPServer {
   private server: Server;
   private httpServer?: http.Server;
   private port: number;
   private isHttpMode: boolean;
-  private state: IstariMCPState = {
-    documents: new Map(),
-    uis: new Map(),
-    terminals: new Map()
-  };
+  private activeDocumentUri?: string;
 
   constructor(port: number = 47821, useHttp: boolean = false) {
     this.port = port;
@@ -110,7 +95,7 @@ export class IstariMCPServer {
             properties: {
               constant: {
                 type: 'string',
-                description: 'The name of the constant to query',
+                description: 'The constant name to get the type of',
               },
             },
             required: ['constant'],
@@ -124,7 +109,7 @@ export class IstariMCPServer {
             properties: {
               constant: {
                 type: 'string',
-                description: 'The name of the constant to query',
+                description: 'The constant name to get the definition of',
               },
             },
             required: ['constant'],
@@ -132,13 +117,13 @@ export class IstariMCPServer {
         },
         {
           name: 'search_constants',
-          description: 'Search for constants mentioning a specific target',
+          description: 'Search for constants that mention a target type or constant',
           inputSchema: {
             type: 'object',
             properties: {
               target: {
                 type: 'string',
-                description: 'The target to search for in constant definitions',
+                description: 'The target to search for in constant types',
               },
             },
             required: ['target'],
@@ -146,7 +131,7 @@ export class IstariMCPServer {
         },
         {
           name: 'next_line',
-          description: 'Move to the next line in the proof',
+          description: 'Process the next line in the Istari proof',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -154,7 +139,7 @@ export class IstariMCPServer {
         },
         {
           name: 'prev_line',
-          description: 'Move to the previous line in the proof',
+          description: 'Go back to the previous line in the Istari proof',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -162,7 +147,7 @@ export class IstariMCPServer {
         },
         {
           name: 'interject',
-          description: 'Execute arbitrary IML code in the current proof context',
+          description: 'Execute arbitrary IML code',
           inputSchema: {
             type: 'object',
             properties: {
@@ -176,7 +161,7 @@ export class IstariMCPServer {
         },
         {
           name: 'get_document_status',
-          description: 'Get the current status of the document including line numbers and verification state',
+          description: 'Get the current status of the active Istari document',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -184,7 +169,7 @@ export class IstariMCPServer {
         },
         {
           name: 'get_diagnostics',
-          description: 'Get current diagnostics (errors, warnings) for the document',
+          description: 'Get diagnostics (errors/warnings) for the current document',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -192,7 +177,7 @@ export class IstariMCPServer {
         },
         {
           name: 'restart_terminal',
-          description: 'Restart the Istari REPL',
+          description: 'Restart the Istari terminal',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -222,7 +207,7 @@ export class IstariMCPServer {
             properties: {
               filename: {
                 type: 'string',
-                description: 'The filename of the document to switch to',
+                description: 'The filename or URI of the document to switch to',
               },
             },
             required: ['filename'],
@@ -231,10 +216,15 @@ export class IstariMCPServer {
       ],
     }));
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
       const { name, arguments: args } = request.params;
 
-      if (!this.state.activeDocument || !this.state.activeUI || !this.state.activeTerminal) {
+      // Get the active document
+      const activeDoc = this.activeDocumentUri ?
+        getIstariDocumentByUri(this.activeDocumentUri) :
+        getActiveIstariDocument();
+
+      if (!activeDoc) {
         throw new McpError(
           ErrorCode.InvalidRequest,
           'No active Istari document. Please open an .ist file first.'
@@ -244,46 +234,46 @@ export class IstariMCPServer {
       try {
         switch (name) {
           case 'goto_line':
-            return await this.gotoLine((args as any).line);
+            return await this.gotoLine(activeDoc, (args as any).line);
 
           case 'get_current_output':
-            return await this.getCurrentOutput();
+            return await this.getCurrentOutput(activeDoc);
 
           case 'get_current_goals':
-            return await this.getCurrentGoals((args as any)?.verbose || false);
+            return await this.getCurrentGoals(activeDoc, (args as any)?.verbose || false);
 
           case 'list_constants':
-            return await this.listConstants((args as any)?.module);
+            return await this.listConstants(activeDoc, (args as any)?.module);
 
           case 'get_type':
-            return await this.getType((args as any).constant);
+            return await this.getType(activeDoc, (args as any).constant);
 
           case 'get_definition':
-            return await this.getDefinition((args as any).constant);
+            return await this.getDefinition(activeDoc, (args as any).constant);
 
           case 'search_constants':
-            return await this.searchConstants((args as any).target);
+            return await this.searchConstants(activeDoc, (args as any).target);
 
           case 'next_line':
-            return await this.nextLine();
+            return await this.nextLine(activeDoc);
 
           case 'prev_line':
-            return await this.prevLine();
+            return await this.prevLine(activeDoc);
 
           case 'interject':
-            return await this.interject((args as any).code);
+            return await this.interject(activeDoc, (args as any).code);
 
           case 'get_document_status':
-            return await this.getDocumentStatus();
+            return await this.getDocumentStatus(activeDoc);
 
           case 'get_diagnostics':
-            return await this.getDiagnostics();
+            return await this.getDiagnostics(activeDoc);
 
           case 'restart_terminal':
-            return await this.restartTerminal();
+            return await this.restartTerminal(activeDoc);
 
           case 'interrupt':
-            return await this.interrupt();
+            return await this.interrupt(activeDoc);
 
           case 'list_documents':
             return await this.listDocuments();
@@ -309,60 +299,27 @@ export class IstariMCPServer {
     });
   }
 
-  public setActiveContext(document: vscode.TextDocument, ui: IstariUI, terminal: IstariTerminal) {
-    const filename = document.fileName;
-
-    // Store in collections
-    this.state.documents.set(filename, document);
-    this.state.uis.set(filename, ui);
-    this.state.terminals.set(filename, terminal);
-
-    // Set as active
-    this.state.activeDocument = document;
-    this.state.activeUI = ui;
-    this.state.activeTerminal = terminal;
+  public updateDocument(doc: IstariDocument) {
+    // Just track the active document if needed
+    // The actual state is managed in global.ts
   }
 
-  public removeDocument(document: vscode.TextDocument) {
-    const filename = document.fileName;
-    this.state.documents.delete(filename);
-    this.state.uis.delete(filename);
-    this.state.terminals.delete(filename);
-
-    // If this was the active document, clear active state
-    if (this.state.activeDocument?.fileName === filename) {
-      this.state.activeDocument = undefined;
-      this.state.activeUI = undefined;
-      this.state.activeTerminal = undefined;
-    }
-  }
-
-  private async gotoLine(line: number): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
-    activeUI.requestedLine = line;
-    activeUI.jumpToRequestedLine();
+  private async gotoLine(doc: IstariDocument, line: number): Promise<any> {
+    doc.ui.requestedLine = line;
+    doc.ui.jumpToRequestedLine();
 
     return {
       content: [
         {
           type: 'text',
-          text: `Navigated to line ${line}. Status: ${activeUI.status}`,
+          text: `Navigated to line ${line}. Status: ${doc.ui.status}`,
         },
       ],
     };
   }
 
-  private async getCurrentOutput(): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
-    const messages = activeUI.webview?.messageHistory || [];
+  private async getCurrentOutput(doc: IstariDocument): Promise<any> {
+    const messages = doc.ui.webview?.messageHistory || [];
     const latestMessage = messages[messages.length - 1] || {};
 
     return {
@@ -370,31 +327,51 @@ export class IstariMCPServer {
         {
           type: 'text',
           text: JSON.stringify({
-            status: activeUI.status,
-            currentLine: activeUI.currentLine + 1,
-            requestedLine: activeUI.requestedLine + 1,
+            status: doc.ui.status,
+            currentLine: doc.ui.currentLine,
+            requestedLine: doc.ui.requestedLine,
             output: latestMessage.text || 'No output available',
-            taskQueueLength: activeUI.terminal.tasks.length,
+            taskQueueLength: doc.ui.terminal.tasks.length,
           }, null, 2),
         },
       ],
     };
   }
 
-  private async getCurrentGoals(verbose: boolean): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
+  private async getCurrentGoals(doc: IstariDocument, verbose: boolean): Promise<any> {
     return new Promise((resolve) => {
-      const command = verbose ? 'Prover.showFull ()' : 'Prover.show ()';
-      activeUI.interjectWithCallback(command, (output: string) => {
+      const callback = (data: string) => {
         resolve({
           content: [
             {
               type: 'text',
-              text: output || 'No goals to display',
+              text: data,
+            },
+          ],
+        });
+        return true;
+      };
+
+      if (verbose) {
+        doc.ui.interjectWithCallback("Goals.printCurrent printLongGoal;", callback);
+      } else {
+        doc.ui.interjectWithCallback("Goals.printCurrent printGoal;", callback);
+      }
+    });
+  }
+
+  private async listConstants(doc: IstariDocument, module?: string): Promise<any> {
+    return new Promise((resolve) => {
+      const code = module
+        ? `Report.listConstants (Symbol.fromValue "${module}");`
+        : "Report.listConstants (Symbol.fromValue \"Main\");";
+
+      doc.ui.interjectWithCallback(code, (data: string) => {
+        resolve({
+          content: [
+            {
+              type: 'text',
+              text: data,
             },
           ],
         });
@@ -403,143 +380,89 @@ export class IstariMCPServer {
     });
   }
 
-  private async listConstants(module?: string): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
+  private async getType(doc: IstariDocument, constant: string): Promise<any> {
     return new Promise((resolve) => {
-      const command = module
-        ? `Report.showModule (parseLongident /${module}/)`
-        : 'Report.showAll ()';
-
-      activeUI.interjectWithCallback(command, (output: string) => {
+      doc.ui.getTypeForConstant(constant, (type: string) => {
         resolve({
           content: [
             {
               type: 'text',
-              text: output || 'No constants found',
+              text: type,
             },
           ],
         });
-        return true;
       });
     });
   }
 
-  private async getType(constant: string): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
+  private async getDefinition(doc: IstariDocument, constant: string): Promise<any> {
     return new Promise((resolve) => {
-      activeUI.interjectWithCallback(`Report.showType (parseLongident /${constant}/)`, (output: string) => {
+      doc.ui.getTypeAndDefinitionForConstant(constant, (data: string) => {
         resolve({
           content: [
             {
               type: 'text',
-              text: output || `Type not found for ${constant}`,
+              text: data,
             },
           ],
         });
-        return true;
       });
     });
   }
 
-  private async getDefinition(constant: string): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
+  private async searchConstants(doc: IstariDocument, target: string): Promise<any> {
     return new Promise((resolve) => {
-      activeUI.interjectWithCallback(`Report.show (parseLongident /${constant}/)`, (output: string) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: output || `Definition not found for ${constant}`,
-            },
-          ],
-        });
-        return true;
-      });
+      doc.ui.interjectWithCallback(
+        `Report.search (parseConstants /${target}/) [];`,
+        (data: string) => {
+          resolve({
+            content: [
+              {
+                type: 'text',
+                text: data,
+              },
+            ],
+          });
+          return true;
+        }
+      );
     });
   }
 
-  private async searchConstants(target: string): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
-    return new Promise((resolve) => {
-      activeUI.interjectWithCallback(`Report.search (parseConstants /${target}/) []`, (output: string) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: output || `No constants found mentioning ${target}`,
-            },
-          ],
-        });
-        return true;
-      });
-    });
-  }
-
-  private async nextLine(): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
-    activeUI.nextLine();
+  private async nextLine(doc: IstariDocument): Promise<any> {
+    doc.ui.nextLine();
 
     return {
       content: [
         {
           type: 'text',
-          text: `Moved to line ${activeUI.currentLine + 1}. Ready`,
+          text: `Moved to next line. Current line: ${doc.ui.currentLine}`,
         },
       ],
     };
   }
 
-  private async prevLine(): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
-    activeUI.prevLine();
+  private async prevLine(doc: IstariDocument): Promise<any> {
+    doc.ui.prevLine();
 
     return {
       content: [
         {
           type: 'text',
-          text: `Moved to line ${activeUI.currentLine + 1}. Ready`,
+          text: `Moved to previous line. Current line: ${doc.ui.currentLine}`,
         },
       ],
     };
   }
 
-  private async interject(code: string): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
+  private async interject(doc: IstariDocument, code: string): Promise<any> {
     return new Promise((resolve) => {
-      activeUI.interjectWithCallback(code, (output: string) => {
+      doc.ui.interjectWithCallback(code, (output: string) => {
         resolve({
           content: [
             {
               type: 'text',
-              text: output || 'Command executed',
+              text: output,
             },
           ],
         });
@@ -548,36 +471,26 @@ export class IstariMCPServer {
     });
   }
 
-  private async getDocumentStatus(): Promise<any> {
-    const { activeUI, activeDocument } = this.state;
-    if (!activeUI || !activeDocument) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI or document');
-    }
-
+  private async getDocumentStatus(doc: IstariDocument): Promise<any> {
     return {
       content: [
         {
           type: 'text',
           text: JSON.stringify({
-            fileName: activeDocument.fileName,
-            status: activeUI.status,
-            currentLine: activeUI.currentLine + 1,
-            requestedLine: activeUI.requestedLine + 1,
-            totalLines: activeDocument.lineCount,
-            taskQueueLength: activeUI.terminal.tasks.length,
+            fileName: doc.document.fileName,
+            status: doc.ui.status,
+            currentLine: doc.ui.currentLine,
+            requestedLine: doc.ui.requestedLine,
+            totalLines: doc.document.lineCount,
+            taskQueueLength: doc.ui.terminal.tasks.length,
           }, null, 2),
         },
       ],
     };
   }
 
-  private async getDiagnostics(): Promise<any> {
-    const { activeDocument } = this.state;
-    if (!activeDocument) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active document');
-    }
-
-    const diagnostics = vscode.languages.getDiagnostics(activeDocument.uri);
+  private async getDiagnostics(doc: IstariDocument): Promise<any> {
+    const diagnostics = vscode.languages.getDiagnostics(doc.document.uri);
 
     return {
       content: [
@@ -600,13 +513,8 @@ export class IstariMCPServer {
     };
   }
 
-  private async restartTerminal(): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
-    activeUI.restartIstariTerminal();
+  private async restartTerminal(doc: IstariDocument): Promise<any> {
+    doc.ui.restartIstariTerminal();
 
     return {
       content: [
@@ -618,13 +526,8 @@ export class IstariMCPServer {
     };
   }
 
-  private async interrupt(): Promise<any> {
-    const { activeUI } = this.state;
-    if (!activeUI) {
-      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
-    }
-
-    activeUI.terminal.interrupt();
+  private async interrupt(doc: IstariDocument): Promise<any> {
+    doc.ui.terminal.interrupt();
 
     return {
       content: [
@@ -637,17 +540,18 @@ export class IstariMCPServer {
   }
 
   private async listDocuments(): Promise<any> {
-    const documents = Array.from(this.state.documents.entries()).map(([filename, doc]) => {
-      const ui = this.state.uis.get(filename);
-      const isActive = this.state.activeDocument?.fileName === filename;
+    const documents = Array.from(istariDocuments.entries()).map(([uri, doc]) => {
+      const isActive = this.activeDocumentUri === uri;
 
       return {
-        filename: filename,
-        basename: filename.split(/[/\\]/).pop() || filename,
+        id: doc.id,
+        uri: uri,
+        filename: doc.document.fileName,
+        basename: doc.document.fileName.split(/[/\\]/).pop() || doc.document.fileName,
         isActive: isActive,
-        status: ui?.status || 'unknown',
-        currentLine: ui?.currentLine || 0,
-        totalLines: doc.lineCount
+        status: doc.ui.status,
+        currentLine: doc.ui.currentLine,
+        totalLines: doc.document.lineCount
       };
     });
 
@@ -657,8 +561,8 @@ export class IstariMCPServer {
           type: 'text',
           text: JSON.stringify({
             documents: documents,
-            activeDocument: this.state.activeDocument?.fileName || null,
-            totalDocuments: documents.length
+            totalDocuments: documents.length,
+            activeDocument: this.activeDocumentUri
           }, null, 2),
         },
       ],
@@ -666,448 +570,56 @@ export class IstariMCPServer {
   }
 
   private async switchDocument(filename: string): Promise<any> {
-    // Try to find the document by exact match first
-    let targetDocument = this.state.documents.get(filename);
-    let targetUI = this.state.uis.get(filename);
-    let targetTerminal = this.state.terminals.get(filename);
+    // Try to find by filename or URI
+    let targetDoc: IstariDocument | undefined;
 
-    // If not found, try to find by basename
-    if (!targetDocument) {
-      for (const [path, doc] of this.state.documents.entries()) {
-        const basename = path.split(/[/\\]/).pop() || path;
-        if (basename === filename) {
-          targetDocument = doc;
-          targetUI = this.state.uis.get(path);
-          targetTerminal = this.state.terminals.get(path);
-          break;
-        }
+    for (const [uri, doc] of istariDocuments.entries()) {
+      if (doc.document.fileName === filename || uri === filename) {
+        targetDoc = doc;
+        break;
       }
     }
 
-    if (!targetDocument || !targetUI || !targetTerminal) {
-      const availableFiles = Array.from(this.state.documents.keys()).map(path =>
-        path.split(/[/\\]/).pop() || path
-      );
-
+    if (!targetDoc) {
       throw new McpError(
         ErrorCode.InvalidRequest,
-        `Document '${filename}' not found. Available documents: ${availableFiles.join(', ')}`
+        `Document not found: ${filename}`
       );
     }
 
-    // Switch to the target document
-    this.state.activeDocument = targetDocument;
-    this.state.activeUI = targetUI;
-    this.state.activeTerminal = targetTerminal;
+    this.activeDocumentUri = targetDoc.uri;
 
     return {
       content: [
         {
           type: 'text',
-          text: `Switched to document: ${targetDocument.fileName}\nStatus: ${targetUI.status}\nCurrent line: ${targetUI.currentLine}\nTotal lines: ${targetDocument.lineCount}`,
+          text: `Switched to document: ${targetDoc.document.fileName}`,
         },
       ],
     };
   }
 
-  public getState() {
-    return this.state;
-  }
-
-  public async start() {
+  async start() {
     if (this.isHttpMode) {
-      await this.startHttpServer();
+      this.httpServer = http.createServer((req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'MCP server is running' }));
+      });
+
+      this.httpServer.listen(this.port, () => {
+        console.log(`Istari MCP HTTP server listening on port ${this.port}`);
+      });
     } else {
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
-      console.error('Istari MCP server started (STDIO mode)');
+      console.log('Istari MCP server started on stdio');
     }
   }
 
-  private async startHttpServer() {
-    this.httpServer = http.createServer(async (req, res) => {
-      // Enable CORS for browser clients
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-      if (req.method === 'OPTIONS') {
-        res.writeHead(200);
-        res.end();
-        return;
-      }
-
-      if (req.method === 'POST' && req.url === '/mcp') {
-        let body = '';
-        req.on('data', chunk => {
-          body += chunk.toString();
-        });
-
-        req.on('end', async () => {
-          try {
-            const mcpRequest = JSON.parse(body);
-            const response = await this.handleMcpRequest(mcpRequest);
-
-            res.setHeader('Content-Type', 'application/json');
-            res.writeHead(200);
-            res.end(JSON.stringify(response));
-          } catch (error) {
-            res.writeHead(400);
-            res.end(JSON.stringify({ error: 'Invalid request' }));
-          }
-        });
-      } else {
-        res.writeHead(404);
-        res.end('Not found');
-      }
-    });
-
-    return new Promise<void>((resolve, reject) => {
-      this.httpServer!.listen(this.port, 'localhost', () => {
-        console.error(`Istari MCP server started on http://localhost:${this.port}`);
-        resolve();
-      });
-
-      this.httpServer!.on('error', (error) => {
-        reject(error);
-      });
-    });
-  }
-
-  private async handleMcpRequest(request: any): Promise<any> {
-    // Handle MCP JSON-RPC 2.0 protocol requests
-    try {
-      let result;
-      switch (request.method) {
-        case 'tools/list':
-          result = await this.handleListTools();
-          break;
-
-        case 'tools/call':
-          result = await this.handleCallTool(request.params);
-          break;
-
-        case 'initialize':
-          result = {
-            protocolVersion: '2024-11-05',
-            capabilities: {
-              tools: {}
-            },
-            serverInfo: {
-              name: 'istari-vscode',
-              version: '1.0.0'
-            }
-          };
-          break;
-
-        case 'notifications/initialized':
-          result = {};
-          break;
-
-        default:
-          throw new Error(`Unknown method: ${request.method}`);
-      }
-
-      // Return JSON-RPC 2.0 response format
-      return {
-        jsonrpc: '2.0',
-        id: request.id,
-        result: result
-      };
-    } catch (error) {
-      // Return JSON-RPC 2.0 error response
-      return {
-        jsonrpc: '2.0',
-        id: request.id,
-        error: {
-          code: -32603,
-          message: error instanceof Error ? error.message : 'Internal error'
-        }
-      };
-    }
-  }
-
-  private async handleListTools(): Promise<any> {
-    return {
-      tools: [
-        {
-          name: 'goto_line',
-          description: 'Navigate to a specific line in the Istari proof document',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              line: {
-                type: 'number',
-                description: 'The line number to navigate to (1-indexed)',
-              },
-            },
-            required: ['line'],
-          },
-        },
-        {
-          name: 'get_current_output',
-          description: 'Get the current output from the Istari proof assistant, including goals and messages',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'get_current_goals',
-          description: 'Get the current proof goals',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              verbose: {
-                type: 'boolean',
-                description: 'Whether to show verbose output with full types',
-                default: false,
-              },
-            },
-          },
-        },
-        {
-          name: 'list_constants',
-          description: 'List all available constants in the current context',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              module: {
-                type: 'string',
-                description: 'Optional module name to filter constants',
-              },
-            },
-          },
-        },
-        {
-          name: 'get_type',
-          description: 'Get the type of a constant',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              constant: {
-                type: 'string',
-                description: 'The name of the constant to query',
-              },
-            },
-            required: ['constant'],
-          },
-        },
-        {
-          name: 'get_definition',
-          description: 'Get the definition of a constant',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              constant: {
-                type: 'string',
-                description: 'The name of the constant to query',
-              },
-            },
-            required: ['constant'],
-          },
-        },
-        {
-          name: 'search_constants',
-          description: 'Search for constants mentioning a specific target',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              target: {
-                type: 'string',
-                description: 'The target to search for in constant definitions',
-              },
-            },
-            required: ['target'],
-          },
-        },
-        {
-          name: 'next_line',
-          description: 'Move to the next line in the proof',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'prev_line',
-          description: 'Move to the previous line in the proof',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'interject',
-          description: 'Execute arbitrary IML code in the current proof context',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              code: {
-                type: 'string',
-                description: 'The IML code to execute',
-              },
-            },
-            required: ['code'],
-          },
-        },
-        {
-          name: 'get_document_status',
-          description: 'Get the current status of the document including line numbers and verification state',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'get_diagnostics',
-          description: 'Get current diagnostics (errors, warnings) for the document',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'restart_terminal',
-          description: 'Restart the Istari REPL',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'interrupt',
-          description: 'Interrupt the current Istari execution',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'list_documents',
-          description: 'List all open Istari documents',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'switch_document',
-          description: 'Switch to a different Istari document',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              filename: {
-                type: 'string',
-                description: 'The filename of the document to switch to',
-              },
-            },
-            required: ['filename'],
-          },
-        },
-      ],
-    };
-  }
-
-  private async handleCallTool(params: any): Promise<any> {
-    const { name, arguments: args } = params;
-
-    if (!this.state.activeDocument || !this.state.activeUI || !this.state.activeTerminal) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
-        'No active Istari document. Please open an .ist file first.'
-      );
-    }
-
-    try {
-      switch (name) {
-        case 'goto_line':
-          return await this.gotoLine((args as any).line);
-
-        case 'get_current_output':
-          return await this.getCurrentOutput();
-
-        case 'get_current_goals':
-          return await this.getCurrentGoals((args as any)?.verbose || false);
-
-        case 'list_constants':
-          return await this.listConstants((args as any)?.module);
-
-        case 'get_type':
-          return await this.getType((args as any).constant);
-
-        case 'get_definition':
-          return await this.getDefinition((args as any).constant);
-
-        case 'search_constants':
-          return await this.searchConstants((args as any).target);
-
-        case 'next_line':
-          return await this.nextLine();
-
-        case 'prev_line':
-          return await this.prevLine();
-
-        case 'interject':
-          return await this.interject((args as any).code);
-
-        case 'get_document_status':
-          return await this.getDocumentStatus();
-
-        case 'get_diagnostics':
-          return await this.getDiagnostics();
-
-        case 'restart_terminal':
-          return await this.restartTerminal();
-
-        case 'interrupt':
-          return await this.interrupt();
-
-        case 'list_documents':
-          return await this.listDocuments();
-
-        case 'switch_document':
-          return await this.switchDocument((args as any).filename);
-
-        default:
-          throw new McpError(
-            ErrorCode.MethodNotFound,
-            `Unknown tool: ${name}`
-          );
-      }
-    } catch (error) {
-      if (error instanceof McpError) {
-        throw error;
-      }
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Tool execution failed: ${(error as Error).message}`
-      );
-    }
-  }
-
-  public async stop() {
+  async stop() {
     if (this.httpServer) {
-      return new Promise<void>((resolve) => {
-        this.httpServer!.close(() => {
-          console.error('Istari MCP HTTP server stopped');
-          resolve();
-        });
-      });
+      this.httpServer.close();
     }
+    await this.server.close();
   }
-
-  public getPort(): number {
-    return this.port;
-  }
-
-  public isRunning(): boolean {
-    return this.isHttpMode ? !!this.httpServer?.listening : true;
-  }
-}
-
-export function startMCPServer() {
-  const server = new IstariMCPServer();
-  server.start().catch(console.error);
-  return server;
 }

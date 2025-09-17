@@ -77,20 +77,11 @@ export class IstariWebview {
             {
                 viewColumn: vscode.ViewColumn.Beside,
                 preserveFocus: true
-            }, { enableScripts: true });
-        // I haven't figured out this yet, but webview is strangely reloading when not visible
-        // so I recoreded events and replay them when the webview is visible
-        this.webview.onDidChangeViewState((e) => {
-            if (e.webviewPanel.visible) {
-                this.webview.webview.html = webviewHTML;
-                this.webview.webview.postMessage({ command: 'resetText' });
-                this.messages.forEach((message) => {
-                    this.webview.webview.postMessage(message);
-                });
-                this.webview.webview.postMessage({ command: 'scrollToBottom' });
-
-            }
-        });
+            }, {
+                enableScripts: true,
+                retainContextWhenHidden: true
+            });
+        this.webview.webview.html = webviewHTML;
     }
 
     postMessage(message: any) {

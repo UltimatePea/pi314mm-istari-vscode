@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { IstariTerminal, IstariTask, IstariInputCommand, IstariCommand } from './istari_terminal';
 import { IstariWebviewState } from './istari_webview_state';
@@ -9,6 +8,12 @@ export class IstariUI {
     terminal: IstariTerminal;
     webview: IstariWebviewState;
     istariEditor: IstariEditor;
+    diagnostics: vscode.DiagnosticCollection;
+
+    // State properties that persist across editor changes
+    private _currentLine: number;
+    private _requestedLine: number;
+    private _status: IstariStatus;
 
     // Getters for commonly accessed properties
     get editor(): vscode.TextEditor {
@@ -16,19 +21,19 @@ export class IstariUI {
     }
 
     get currentLine(): number {
-        return this.istariEditor.getCurrentLine();
+        return this._currentLine;
     }
 
     get requestedLine(): number {
-        return this.istariEditor.getRequestedLine();
+        return this._requestedLine;
     }
 
     set requestedLine(line: number) {
-        this.istariEditor.setRequestedLine(line);
+        this._requestedLine = line;
     }
 
     get status(): IstariStatus {
-        return this.istariEditor.getStatus();
+        return this._status;
     }
 
     constructor(document: vscode.TextDocument) {
@@ -41,6 +46,13 @@ export class IstariUI {
         }
         this.istariEditor = new IstariEditor(editor);
         this.webview = new IstariWebviewState(document);
+        this.diagnostics = vscode.languages.createDiagnosticCollection("istari");
+
+        // Initialize state
+        this._currentLine = 1;
+        this._requestedLine = 1;
+        this._status = "ready";
+
         this.terminal = new IstariTerminal(document,
             this.defaultCallback.bind(this),
             this.tasksUpdated.bind(this));
@@ -52,7 +64,11 @@ export class IstariUI {
             this.defaultCallback.bind(this),
             this.tasksUpdated.bind(this));
         this.webview.resetText();
-        this.istariEditor.reset();
+        this._currentLine = 1;
+        this._requestedLine = 1;
+        this._status = "ready";
+        this.updateDecorations();
+        this.diagnostics.clear();
     }
 
     tasksUpdated() {
@@ -63,19 +79,37 @@ export class IstariUI {
         }
     }
 
+    updateDecorations() {
+        this.istariEditor.updateDecorations(this._currentLine, this._requestedLine, this._status);
+    }
+
     updateCurrentLine(line: number) {
-        this.istariEditor.updateCurrentLine(line);
+        this._currentLine = line;
+        this.updateDecorations();
         this.webview.changeCursor(line.toString());
     }
 
     setEditor(editor: vscode.TextEditor) {
         this.istariEditor.setEditor(editor);
-        this.webview.changeCursor(this.istariEditor.getCurrentLine().toString());
+        this.updateDecorations();
+        this.webview.changeCursor(this._currentLine.toString());
     }
 
     // called on send lines, also gets diagnostic information
     respondToSendLineResponse(text: string) {
-        this.istariEditor.setDiagnostic(text);
+        // format: ... error ...  <line>.<col>.
+        let diagnostic = text.match(/error.*?(\d+)\.(\d+)\.\s$/);
+        if (diagnostic) {
+            let line = parseInt(diagnostic[1]);
+            let col = parseInt(diagnostic[2]);
+            // get the range for single word (seems istari uses 1 based line number and 0 based col number)
+            let wordRange = this.istariEditor.document.getWordRangeAtPosition(new vscode.Position(line - 1, col))
+                || new vscode.Range(new vscode.Position(line - 1, col), new vscode.Position(line - 1, col + 10));
+            let diagnosticInfo = new vscode.Diagnostic(wordRange, text, vscode.DiagnosticSeverity.Error);
+            this.diagnostics.set(this.document.uri, [diagnosticInfo]);
+        } else {
+            this.diagnostics.clear();
+        }
     }
 
     defaultCallback(cmd: IstariCommand, data: string) {
@@ -90,17 +124,20 @@ export class IstariUI {
             }
             case IstariCommand.working: {
                 this.webview.changeStatus("Working " + data);
-                this.istariEditor.setStatus("working");
+                this._status = "working";
+                this.updateDecorations();
                 break;
             }
             case IstariCommand.partialReady: {
                 this.webview.changeStatus("Partial Ready " + data);
-                this.istariEditor.setStatus("partialReady");
+                this._status = "partialReady";
+                this.updateDecorations();
                 break;
             }
             case IstariCommand.ready: {
                 this.webview.changeStatus("Ready " + data);
-                this.istariEditor.setStatus("ready");
+                this._status = "ready";
+                this.updateDecorations();
                 break;
             }
 
@@ -158,17 +195,15 @@ export class IstariUI {
     }
 
     jumpToRequestedLine() {
-        let currentLine = this.istariEditor.getCurrentLine();
-        let requestedLine = this.istariEditor.getRequestedLine();
-        if (requestedLine > currentLine) {
-            let text = this.istariEditor.getTextRange(currentLine - 1, requestedLine - 1);
+        if (this._requestedLine > this._currentLine) {
+            let text = this.istariEditor.getTextRange(this._currentLine - 1, this._requestedLine - 1);
             this.sendLines(text);
-        } else if (requestedLine < currentLine) {
-            this.rewindToLine(requestedLine);
-        } else if (requestedLine === currentLine && vscode.workspace.getConfiguration().get<boolean>('istari.continueJumpingForward')?.valueOf()) {
+        } else if (this._requestedLine < this._currentLine) {
+            this.rewindToLine(this._requestedLine);
+        } else if (this._requestedLine === this._currentLine && vscode.workspace.getConfiguration().get<boolean>('istari.continueJumpingForward')?.valueOf()) {
             // special: if we already jumped to the requested line, just jump the next line past ;
             // currentLine and requestedLine is 1 indexed, nextline is zero-indexed
-            let nextline = currentLine;
+            let nextline = this._currentLine;
             while (nextline < this.istariEditor.lineCount) {
                 let line = this.istariEditor.getLineAt(nextline).text;
                 nextline++;
@@ -176,8 +211,8 @@ export class IstariUI {
                     break;
                 }
             }
-            if (nextline + 1 !== requestedLine) {
-                this.istariEditor.setRequestedLine(nextline + 1);
+            if (nextline + 1 !== this._requestedLine) {
+                this._requestedLine = nextline + 1;
                 this.jumpToRequestedLine();
             }
         }
@@ -185,15 +220,14 @@ export class IstariUI {
 
     jumpToCursor() {
         let cursorLine = this.istariEditor.getCursorLine();
-        this.istariEditor.setRequestedLine(cursorLine + 1);
+        this._requestedLine = cursorLine + 1;
         this.jumpToRequestedLine();
     }
 
     nextLine() {
         console.log("nextLine not implemented");
-        let currentLine = this.istariEditor.getCurrentLine();
-        if (currentLine < this.istariEditor.lineCount) {
-            let text = this.istariEditor.getTextRange(currentLine - 1, currentLine);
+        if (this._currentLine < this.istariEditor.lineCount) {
+            let text = this.istariEditor.getTextRange(this._currentLine - 1, this._currentLine);
             this.sendLines(text);
         } else {
             console.log("error");
@@ -202,9 +236,8 @@ export class IstariUI {
 
     prevLine() {
         console.log("prevLine not implemented");
-        let currentLine = this.istariEditor.getCurrentLine();
-        if (currentLine > 1) {
-            this.rewindToLine(currentLine - 1);
+        if (this._currentLine > 1) {
+            this.rewindToLine(this._currentLine - 1);
         } else {
             console.log("error");
         }
@@ -214,12 +247,11 @@ export class IstariUI {
     edit(e: vscode.TextDocumentChangeEvent) {
         if (e.document === this.istariEditor.document) {
             if (e.contentChanges.length > 0) {
-                let currentLine = this.istariEditor.getCurrentLine();
-                if (e.contentChanges[0].range.end.line < currentLine - 1) {
+                if (e.contentChanges[0].range.end.line < this._currentLine - 1) {
                     // skip if just inserting a trailing newline (possibly followed by spaces) right before this line
                     if (e.contentChanges[0].text.includes("\n")
                         && e.contentChanges[0].text.trim() === ""
-                        && e.contentChanges[0].range.end.line === currentLine - 2
+                        && e.contentChanges[0].range.end.line === this._currentLine - 2
                         // ensures line after insertion is empty to prevent insertion in the middle
                         && e.document.lineAt(e.contentChanges[0].range.end.line + 1).text.trim() === ""
                     ) {

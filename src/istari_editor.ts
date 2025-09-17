@@ -51,64 +51,29 @@ const decorationBlueGutter = vscode.window.createTextEditorDecorationType({
 
 export type IstariStatus = "ready" | "working" | "partialReady";
 
+/**
+ * IstariEditor is a stateless class that manages visual decorations for an editor.
+ * All state is passed in from IstariUI, allowing the editor to be swapped without losing state.
+ */
 export class IstariEditor {
     editor: vscode.TextEditor;
-    private diagnostics: vscode.DiagnosticCollection;
-    private currentLine: number;
-    private requestedLine: number;
-    private status: IstariStatus;
 
     constructor(editor: vscode.TextEditor) {
         this.editor = editor;
-        this.diagnostics = vscode.languages.createDiagnosticCollection("istari");
-        this.currentLine = 1;
-        this.requestedLine = 1;
-        this.status = "ready";
     }
 
     get document(): vscode.TextDocument {
         return this.editor.document;
     }
 
-    getCurrentLine(): number {
-        return this.currentLine;
-    }
-
-    getRequestedLine(): number {
-        return this.requestedLine;
-    }
-
-    getStatus(): IstariStatus {
-        return this.status;
-    }
-
-    setStatus(status: IstariStatus): void {
-        this.status = status;
-        this.updateDecorations();
-    }
-
     setEditor(editor: vscode.TextEditor): void {
         this.editor = editor;
-        this.updateCurrentLine(this.currentLine);
     }
 
-    updateCurrentLine(line: number): void {
-        this.currentLine = line;
-        this.updateDecorations();
-    }
-
-    setRequestedLine(line: number): void {
-        this.requestedLine = line;
-    }
-
-    getCursorLine(): number {
-        return this.editor.selection.active.line;
-    }
-
-    updateDecorations(): void {
+    updateDecorations(currentLine: number, requestedLine: number, status: IstariStatus): void {
         // blue dot on current line
-        let range = this.currentLine > 1 ? [
-            new vscode.Range(new vscode.Position(this.currentLine - 1, 0), new vscode.Position(this.currentLine - 1, 0))
+        let range = currentLine > 1 ? [
+            new vscode.Range(new vscode.Position(currentLine - 1, 0), new vscode.Position(currentLine - 1, 0))
         ] : [];
         let colorCurrentLine = vscode.workspace.getConfiguration().get<boolean>('istari.colorCurrentLine');
         if (colorCurrentLine && colorCurrentLine.valueOf()) {
@@ -116,7 +81,7 @@ export class IstariEditor {
         }
         let colorGutter = vscode.workspace.getConfiguration().get<boolean>('istari.colorGutter');
         if (colorGutter && colorGutter.valueOf()) {
-            if (this.status === "working") {
+            if (status === "working") {
                 this.editor.setDecorations(decorationBlueHourglassGutter, range);
                 this.editor.setDecorations(decorationBlueArrowGutter, []);
             } else {
@@ -125,8 +90,8 @@ export class IstariEditor {
             }
         }
         // all previous line green
-        let greenRange = this.currentLine > 1 ? [
-            new vscode.Range(new vscode.Position(0, 0), new vscode.Position(this.currentLine - 2, 0))
+        let greenRange = currentLine > 1 ? [
+            new vscode.Range(new vscode.Position(0, 0), new vscode.Position(currentLine - 2, 0))
         ] : [];
         if (colorGutter && colorGutter.valueOf()) {
             this.editor.setDecorations(decorationGreenGutter, greenRange);
@@ -140,11 +105,11 @@ export class IstariEditor {
             // ready -> red (this indicates a failure if this range is non empty)
             // partial ready -> blue
             // working -> yellow
-            let requestedLine = this.requestedLine > 0 ? this.requestedLine : this.currentLine;
-            let range2 = requestedLine > this.currentLine ? [
-                new vscode.Range(new vscode.Position(this.currentLine, 0), new vscode.Position(requestedLine - 2, 0))
+            let reqLine = requestedLine > 0 ? requestedLine : currentLine;
+            let range2 = reqLine > currentLine ? [
+                new vscode.Range(new vscode.Position(currentLine, 0), new vscode.Position(reqLine - 2, 0))
             ] : [];
-            switch (this.status) {
+            switch (status) {
                 case "ready": {
                     this.editor.setDecorations(decorationRedGutter, range2);
                     this.editor.setDecorations(decorationBlueGutter, []);
@@ -155,7 +120,7 @@ export class IstariEditor {
                     this.editor.setDecorations(decorationRedGutter, []);
                     // force adding range on partial ready status
                     if (range2.length === 0) {
-                        range2 = [new vscode.Range(new vscode.Position(this.currentLine, 0), new vscode.Position(this.currentLine, 0))];
+                        range2 = [new vscode.Range(new vscode.Position(currentLine, 0), new vscode.Position(currentLine, 0))];
                     }
                     this.editor.setDecorations(decorationBlueGutter, range2);
                     this.editor.setDecorations(decorationYellowGutter, []);
@@ -171,32 +136,19 @@ export class IstariEditor {
         }
     }
 
-    setDiagnostic(text: string): void {
-        // format: ... error ...  <line>.<col>.
-        let diagnostic = text.match(/error.*?(\d+)\.(\d+)\.\s$/);
-        if (diagnostic) {
-            let line = parseInt(diagnostic[1]);
-            let col = parseInt(diagnostic[2]);
-            // get the range for single word (seems istari uses 1 based line number and 0 based col number)
-            let wordRange = this.editor.document.getWordRangeAtPosition(new vscode.Position(line - 1, col))
-                || new vscode.Range(new vscode.Position(line - 1, col), new vscode.Position(line - 1, col + 10));
-            let diagnosticInfo = new vscode.Diagnostic(wordRange, text, vscode.DiagnosticSeverity.Error);
-            this.diagnostics.set(this.document.uri, [diagnosticInfo]);
-        } else {
-            this.diagnostics.clear();
-        }
+    clearDecorations(): void {
+        this.editor.setDecorations(decorationBlueArrowGutter, []);
+        this.editor.setDecorations(decorationBlueHourglassGutter, []);
+        this.editor.setDecorations(decorationBlueBackground, []);
+        this.editor.setDecorations(decorationGreenGutter, []);
+        this.editor.setDecorations(decorationGreenBackground, []);
+        this.editor.setDecorations(decorationYellowGutter, []);
+        this.editor.setDecorations(decorationRedGutter, []);
+        this.editor.setDecorations(decorationBlueGutter, []);
     }
 
-    clearDiagnostics(): void {
-        this.diagnostics.clear();
-    }
-
-    reset(): void {
-        this.currentLine = 1;
-        this.requestedLine = 1;
-        this.status = "ready";
-        this.updateDecorations();
-        this.clearDiagnostics();
+    getCursorLine(): number {
+        return this.editor.selection.active.line;
     }
 
     getTextRange(startLine: number, endLine: number): string {
@@ -210,9 +162,5 @@ export class IstariEditor {
 
     get lineCount(): number {
         return this.editor.document.lineCount;
-    }
-
-    dispose(): void {
-        this.diagnostics.dispose();
     }
 }

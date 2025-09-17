@@ -40,7 +40,9 @@ function registerDoc(doc: vscode.TextDocument, editor: vscode.TextEditor | undef
 
 function startMcpServer() {
 	if (!mcpServer) {
-		const newServer = new IstariMCPServer();
+		// Start HTTP server by default for Claude Code integration
+		const port = vscode.workspace.getConfiguration().get<number>('istari.mcpPort') || 47821;
+		const newServer = new IstariMCPServer(port, true);
 		setMcpServer(newServer);
 
 		// Set active context if there's an active Istari document
@@ -53,9 +55,11 @@ function startMcpServer() {
 		}
 
 		newServer.start().then(() => {
-			console.log('Istari MCP server started automatically');
+			console.log(`Istari MCP HTTP server started on port ${port}`);
+			vscode.window.showInformationMessage(`Istari MCP server running on http://localhost:${port}`);
 		}).catch((error: any) => {
 			console.error(`Failed to start MCP server: ${error.message}`);
+			vscode.window.showErrorMessage(`Failed to start MCP server: ${error.message}`);
 		});
 	}
 }

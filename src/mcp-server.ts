@@ -1,5 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import * as http from 'http';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -22,13 +23,18 @@ interface IstariMCPState {
 
 export class IstariMCPServer {
   private server: Server;
+  private httpServer?: http.Server;
+  private port: number;
+  private isHttpMode: boolean;
   private state: IstariMCPState = {
     documents: new Map(),
     uis: new Map(),
     terminals: new Map()
   };
 
-  constructor() {
+  constructor(port: number = 47821, useHttp: boolean = false) {
+    this.port = port;
+    this.isHttpMode = useHttp;
     this.server = new Server(
       {
         name: 'istari-vscode',
@@ -709,9 +715,394 @@ export class IstariMCPServer {
   }
 
   public async start() {
-    const transport = new StdioServerTransport();
-    await this.server.connect(transport);
-    console.error('Istari MCP server started');
+    if (this.isHttpMode) {
+      await this.startHttpServer();
+    } else {
+      const transport = new StdioServerTransport();
+      await this.server.connect(transport);
+      console.error('Istari MCP server started (STDIO mode)');
+    }
+  }
+
+  private async startHttpServer() {
+    this.httpServer = http.createServer(async (req, res) => {
+      // Enable CORS for browser clients
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+
+      if (req.method === 'POST' && req.url === '/mcp') {
+        let body = '';
+        req.on('data', chunk => {
+          body += chunk.toString();
+        });
+
+        req.on('end', async () => {
+          try {
+            const mcpRequest = JSON.parse(body);
+            const response = await this.handleMcpRequest(mcpRequest);
+
+            res.setHeader('Content-Type', 'application/json');
+            res.writeHead(200);
+            res.end(JSON.stringify(response));
+          } catch (error) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: 'Invalid request' }));
+          }
+        });
+      } else {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+    });
+
+    return new Promise<void>((resolve, reject) => {
+      this.httpServer!.listen(this.port, 'localhost', () => {
+        console.error(`Istari MCP server started on http://localhost:${this.port}`);
+        resolve();
+      });
+
+      this.httpServer!.on('error', (error) => {
+        reject(error);
+      });
+    });
+  }
+
+  private async handleMcpRequest(request: any): Promise<any> {
+    // Handle MCP JSON-RPC 2.0 protocol requests
+    try {
+      let result;
+      switch (request.method) {
+        case 'tools/list':
+          result = await this.handleListTools();
+          break;
+
+        case 'tools/call':
+          result = await this.handleCallTool(request.params);
+          break;
+
+        case 'initialize':
+          result = {
+            protocolVersion: '2024-11-05',
+            capabilities: {
+              tools: {}
+            },
+            serverInfo: {
+              name: 'istari-vscode',
+              version: '1.0.0'
+            }
+          };
+          break;
+
+        case 'notifications/initialized':
+          result = {};
+          break;
+
+        default:
+          throw new Error(`Unknown method: ${request.method}`);
+      }
+
+      // Return JSON-RPC 2.0 response format
+      return {
+        jsonrpc: '2.0',
+        id: request.id,
+        result: result
+      };
+    } catch (error) {
+      // Return JSON-RPC 2.0 error response
+      return {
+        jsonrpc: '2.0',
+        id: request.id,
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : 'Internal error'
+        }
+      };
+    }
+  }
+
+  private async handleListTools(): Promise<any> {
+    return {
+      tools: [
+        {
+          name: 'goto_line',
+          description: 'Navigate to a specific line in the Istari proof document',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              line: {
+                type: 'number',
+                description: 'The line number to navigate to (1-indexed)',
+              },
+            },
+            required: ['line'],
+          },
+        },
+        {
+          name: 'get_current_output',
+          description: 'Get the current output from the Istari proof assistant, including goals and messages',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'get_current_goals',
+          description: 'Get the current proof goals',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              verbose: {
+                type: 'boolean',
+                description: 'Whether to show verbose output with full types',
+                default: false,
+              },
+            },
+          },
+        },
+        {
+          name: 'list_constants',
+          description: 'List all available constants in the current context',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              module: {
+                type: 'string',
+                description: 'Optional module name to filter constants',
+              },
+            },
+          },
+        },
+        {
+          name: 'get_type',
+          description: 'Get the type of a constant',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              constant: {
+                type: 'string',
+                description: 'The name of the constant to query',
+              },
+            },
+            required: ['constant'],
+          },
+        },
+        {
+          name: 'get_definition',
+          description: 'Get the definition of a constant',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              constant: {
+                type: 'string',
+                description: 'The name of the constant to query',
+              },
+            },
+            required: ['constant'],
+          },
+        },
+        {
+          name: 'search_constants',
+          description: 'Search for constants mentioning a specific target',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              target: {
+                type: 'string',
+                description: 'The target to search for in constant definitions',
+              },
+            },
+            required: ['target'],
+          },
+        },
+        {
+          name: 'next_line',
+          description: 'Move to the next line in the proof',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'prev_line',
+          description: 'Move to the previous line in the proof',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'interject',
+          description: 'Execute arbitrary IML code in the current proof context',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                description: 'The IML code to execute',
+              },
+            },
+            required: ['code'],
+          },
+        },
+        {
+          name: 'get_document_status',
+          description: 'Get the current status of the document including line numbers and verification state',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'get_diagnostics',
+          description: 'Get current diagnostics (errors, warnings) for the document',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'restart_terminal',
+          description: 'Restart the Istari REPL',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'interrupt',
+          description: 'Interrupt the current Istari execution',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'list_documents',
+          description: 'List all open Istari documents',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'switch_document',
+          description: 'Switch to a different Istari document',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              filename: {
+                type: 'string',
+                description: 'The filename of the document to switch to',
+              },
+            },
+            required: ['filename'],
+          },
+        },
+      ],
+    };
+  }
+
+  private async handleCallTool(params: any): Promise<any> {
+    const { name, arguments: args } = params;
+
+    if (!this.state.activeDocument || !this.state.activeUI || !this.state.activeTerminal) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        'No active Istari document. Please open an .ist file first.'
+      );
+    }
+
+    try {
+      switch (name) {
+        case 'goto_line':
+          return await this.gotoLine((args as any).line);
+
+        case 'get_current_output':
+          return await this.getCurrentOutput();
+
+        case 'get_current_goals':
+          return await this.getCurrentGoals((args as any)?.verbose || false);
+
+        case 'list_constants':
+          return await this.listConstants((args as any)?.module);
+
+        case 'get_type':
+          return await this.getType((args as any).constant);
+
+        case 'get_definition':
+          return await this.getDefinition((args as any).constant);
+
+        case 'search_constants':
+          return await this.searchConstants((args as any).target);
+
+        case 'next_line':
+          return await this.nextLine();
+
+        case 'prev_line':
+          return await this.prevLine();
+
+        case 'interject':
+          return await this.interject((args as any).code);
+
+        case 'get_document_status':
+          return await this.getDocumentStatus();
+
+        case 'get_diagnostics':
+          return await this.getDiagnostics();
+
+        case 'restart_terminal':
+          return await this.restartTerminal();
+
+        case 'interrupt':
+          return await this.interrupt();
+
+        case 'list_documents':
+          return await this.listDocuments();
+
+        case 'switch_document':
+          return await this.switchDocument((args as any).filename);
+
+        default:
+          throw new McpError(
+            ErrorCode.MethodNotFound,
+            `Unknown tool: ${name}`
+          );
+      }
+    } catch (error) {
+      if (error instanceof McpError) {
+        throw error;
+      }
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Tool execution failed: ${(error as Error).message}`
+      );
+    }
+  }
+
+  public async stop() {
+    if (this.httpServer) {
+      return new Promise<void>((resolve) => {
+        this.httpServer!.close(() => {
+          console.error('Istari MCP HTTP server stopped');
+          resolve();
+        });
+      });
+    }
+  }
+
+  public getPort(): number {
+    return this.port;
+  }
+
+  public isRunning(): boolean {
+    return this.isHttpMode ? !!this.httpServer?.listening : true;
   }
 }
 

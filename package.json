@@ -71,6 +71,11 @@
           "type": "boolean",
           "default": false,
           "description": "If jump to specific line should advance line by one if already at that line"
+        },
+        "istari.mcpPort": {
+          "type": "number",
+          "default": 47821,
+          "description": "Port for the Istari MCP HTTP server (for Claude Code integration)"
         }
       }
     },

@@ -161,6 +161,10 @@
       {
         "command": "istari.startMcpServer",
         "title": "Istari: Start MCP Server"
+      },
+      {
+        "command": "istari.showWebview",
+        "title": "Istari: Show Webview"
       }
     ],
     "keybindings": [

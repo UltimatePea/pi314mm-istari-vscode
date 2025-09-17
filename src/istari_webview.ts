@@ -74,14 +74,22 @@ export class IstariWebview {
     constructor(document: vscode.TextDocument) {
         this.webview = vscode.window.createWebviewPanel("istari",
             path.basename(document.fileName),
+            vscode.ViewColumn.Beside, // Create in active column but don't show
             {
-                viewColumn: vscode.ViewColumn.Beside,
-                preserveFocus: true
-            }, {
                 enableScripts: true,
                 retainContextWhenHidden: true
             });
         this.webview.webview.html = webviewHTML;
+
+        // Show notification with button to open webview
+        vscode.window.showInformationMessage(
+            `Istari session started for ${path.basename(document.fileName)}`,
+            'Open Webview'
+        ).then(selection => {
+            if (selection === 'Open Webview') {
+                this.webview.reveal(vscode.ViewColumn.Beside, false);
+            }
+        });
     }
 
     postMessage(message: any) {

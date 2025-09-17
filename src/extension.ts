@@ -82,12 +82,8 @@ export function activate(context: vscode.ExtensionContext) {
 		registerDoc(doc);
 	});
 
-	vscode.workspace.onDidCloseTextDocument((doc) => {
-		istariUIs.delete(doc);
-		// Remove from MCP server if it exists
-		if (mcpServer) {
-			mcpServer.removeDocument(doc);
-		}
+	vscode.workspace.onDidCloseTextDocument((_doc) => {
+		// Do nothing - keep UI/terminal running in background for MCP access
 	});
 
 	vscode.window.visibleTextEditors.forEach((editor) => {
@@ -224,6 +220,15 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage('Istari MCP server started');
 		} else {
 			vscode.window.showInformationMessage('MCP server is already running');
+		}
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('istari.showWebview', () => {
+		let istari = getIstari();
+		if (istari) {
+			istari.webview.webview.reveal(vscode.ViewColumn.Beside, false);
+		} else {
+			vscode.window.showInformationMessage('No active Istari document. Open an .ist file first.');
 		}
 	}));
 

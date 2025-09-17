@@ -14,6 +14,7 @@ export class IstariUI {
     private _currentLine: number;
     private _requestedLine: number;
     private _status: IstariStatus;
+    private _checkedLinesCache: string[]; // Cache of checked lines as array
 
     // Getters for commonly accessed properties
     get editor(): vscode.TextEditor {
@@ -52,6 +53,7 @@ export class IstariUI {
         this._currentLine = 1;
         this._requestedLine = 1;
         this._status = "ready";
+        this._checkedLinesCache = [];
 
         this.terminal = new IstariTerminal(document,
             this.defaultCallback.bind(this),
@@ -67,6 +69,7 @@ export class IstariUI {
         this._currentLine = 1;
         this._requestedLine = 1;
         this._status = "ready";
+        this._checkedLinesCache = [];
         this.updateDecorations();
         this.diagnostics.clear();
     }
@@ -85,6 +88,15 @@ export class IstariUI {
 
     updateCurrentLine(line: number) {
         this._currentLine = line;
+        // Update cache with the checked portion of the document
+        if (line > 1) {
+            this._checkedLinesCache = [];
+            for (let i = 0; i < line - 1; i++) {
+                this._checkedLinesCache.push(this.istariEditor.getLineAt(i).text);
+            }
+        } else {
+            this._checkedLinesCache = [];
+        }
         this.updateDecorations();
         this.webview.changeCursor(line.toString());
     }
@@ -188,6 +200,13 @@ export class IstariUI {
     }
 
     rewindToLine(line: number) {
+        // When rewinding, update the cache to reflect the new state
+        if (line > 1) {
+            // Keep only the lines that will remain checked after rewind
+            this._checkedLinesCache = this._checkedLinesCache.slice(0, line - 1);
+        } else {
+            this._checkedLinesCache = [];
+        }
         this.terminal.enqueueTask(new IstariTask(IstariInputCommand.rewind, line.toString(), (data) => {
             this.webview.appendText(data);
             return true;
@@ -195,6 +214,33 @@ export class IstariUI {
     }
 
     jumpToRequestedLine() {
+        // Check if the cached content matches the current document
+        if (this._checkedLinesCache.length > 0) {
+            // Find the last line where content still matches
+            let validLine = 1;
+
+            for (let i = 0; i < this._checkedLinesCache.length; i++) {
+                // Check if this line still exists and matches
+                if (i < this.istariEditor.lineCount) {
+                    let currentLineText = this.istariEditor.getLineAt(i).text;
+                    if (currentLineText === this._checkedLinesCache[i]) {
+                        validLine = i + 2; // i is 0-indexed, validLine is 1-indexed and points to the next unchecked line
+                    } else {
+                        break; // Found a mismatch
+                    }
+                } else {
+                    break; // Document is shorter than cache
+                }
+            }
+
+            // Rewind if we're ahead of the last valid line
+            if (validLine < this._currentLine) {
+                this.rewindToLine(validLine);
+                this._requestedLine = Math.max(validLine, this._requestedLine);
+                return;
+            }
+        }
+
         if (this._requestedLine > this._currentLine) {
             let text = this.istariEditor.getTextRange(this._currentLine - 1, this._requestedLine - 1);
             this.sendLines(text);

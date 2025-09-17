@@ -1,7 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { 
-  CallToolRequestSchema, 
+import {
+  CallToolRequestSchema,
   ListToolsRequestSchema,
   ErrorCode,
   McpError
@@ -13,6 +13,23 @@ interface IstariMCPState {
   activeDocument?: vscode.TextDocument;
   activeUI?: IstariUI;
   activeTerminal?: IstariTerminal;
+}
+
+interface IstariWebview {
+  messages: any[];
+}
+
+interface ExtendedIstariUI {
+  status: string;
+  currentLine: number;
+  requestedLine: number;
+  terminal: IstariTerminal;
+  webview?: IstariWebview;
+  interjectWithCallback(text: string, callback: (data: string) => boolean): void;
+  jumpToRequestedLine(): void;
+  restartIstariTerminal(): void;
+  nextLine(): void;
+  prevLine(): void;
 }
 
 export class IstariMCPServer {
@@ -207,47 +224,47 @@ export class IstariMCPServer {
       try {
         switch (name) {
           case 'goto_line':
-            return await this.gotoLine(args.line);
-          
+            return await this.gotoLine((args as any).line);
+
           case 'get_current_output':
             return await this.getCurrentOutput();
-          
+
           case 'get_current_goals':
-            return await this.getCurrentGoals(args.verbose || false);
-          
+            return await this.getCurrentGoals((args as any)?.verbose || false);
+
           case 'list_constants':
-            return await this.listConstants(args.module);
-          
+            return await this.listConstants((args as any)?.module);
+
           case 'get_type':
-            return await this.getType(args.constant);
-          
+            return await this.getType((args as any).constant);
+
           case 'get_definition':
-            return await this.getDefinition(args.constant);
-          
+            return await this.getDefinition((args as any).constant);
+
           case 'search_constants':
-            return await this.searchConstants(args.target);
-          
+            return await this.searchConstants((args as any).target);
+
           case 'next_line':
             return await this.nextLine();
-          
+
           case 'prev_line':
             return await this.prevLine();
-          
+
           case 'interject':
-            return await this.interject(args.code);
-          
+            return await this.interject((args as any).code);
+
           case 'get_document_status':
             return await this.getDocumentStatus();
-          
+
           case 'get_diagnostics':
             return await this.getDiagnostics();
-          
+
           case 'restart_terminal':
             return await this.restartTerminal();
-          
+
           case 'interrupt':
             return await this.interrupt();
-          
+
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,
@@ -260,7 +277,7 @@ export class IstariMCPServer {
         }
         throw new McpError(
           ErrorCode.InternalError,
-          `Tool execution failed: ${error.message}`
+          `Tool execution failed: ${(error as Error).message}`
         );
       }
     });
@@ -273,37 +290,45 @@ export class IstariMCPServer {
   }
 
   private async gotoLine(line: number): Promise<any> {
-    const { activeUI, activeDocument } = this.state;
-    
-    return new Promise((resolve) => {
-      activeUI.jumpToLine(line - 1, (output) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: `Navigated to line ${line}. Status: ${activeUI.state}\n${output || 'Ready'}`,
-            },
-          ],
-        });
-      });
-    });
+    const { activeUI } = this.state;
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    const extUI = activeUI as ExtendedIstariUI;
+    extUI.requestedLine = line;
+    extUI.jumpToRequestedLine();
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Navigated to line ${line}. Status: ${extUI.status}`,
+        },
+      ],
+    };
   }
 
   private async getCurrentOutput(): Promise<any> {
     const { activeUI } = this.state;
-    const messages = activeUI.webview?.messages || [];
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    const extUI = activeUI as ExtendedIstariUI;
+    const messages = extUI.webview?.messages || [];
     const latestMessage = messages[messages.length - 1] || {};
-    
+
     return {
       content: [
         {
           type: 'text',
           text: JSON.stringify({
-            state: activeUI.state,
-            currentLine: activeUI.currentLine + 1,
-            requestedLine: activeUI.requestedLine + 1,
+            status: extUI.status,
+            currentLine: extUI.currentLine + 1,
+            requestedLine: extUI.requestedLine + 1,
             output: latestMessage.text || 'No output available',
-            taskQueueLength: activeUI.terminal.taskQueueLength,
+            taskQueueLength: extUI.terminal.tasks.length,
           }, null, 2),
         },
       ],
@@ -311,11 +336,16 @@ export class IstariMCPServer {
   }
 
   private async getCurrentGoals(verbose: boolean): Promise<any> {
-    const { activeTerminal } = this.state;
-    
+    const { activeUI } = this.state;
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    const extUI = activeUI as ExtendedIstariUI;
+
     return new Promise((resolve) => {
-      const command = verbose ? 'Report.showGoalsVerbosely ()' : 'Report.showGoals ()';
-      activeTerminal.interject(command, (output) => {
+      const command = verbose ? 'Prover.showFull ()' : 'Prover.show ()';
+      extUI.interjectWithCallback(command, (output: string) => {
         resolve({
           content: [
             {
@@ -324,19 +354,25 @@ export class IstariMCPServer {
             },
           ],
         });
+        return true;
       });
     });
   }
 
   private async listConstants(module?: string): Promise<any> {
-    const { activeTerminal } = this.state;
-    
+    const { activeUI } = this.state;
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    const extUI = activeUI as ExtendedIstariUI;
+
     return new Promise((resolve) => {
-      const command = module 
-        ? `Report.showConstantsModule "${module}"` 
-        : 'Report.showConstants ()';
-      
-      activeTerminal.interject(command, (output) => {
+      const command = module
+        ? `Report.showModule (parseLongident /${module}/)`
+        : 'Report.showAll ()';
+
+      extUI.interjectWithCallback(command, (output: string) => {
         resolve({
           content: [
             {
@@ -345,15 +381,21 @@ export class IstariMCPServer {
             },
           ],
         });
+        return true;
       });
     });
   }
 
   private async getType(constant: string): Promise<any> {
-    const { activeTerminal } = this.state;
-    
+    const { activeUI } = this.state;
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    const extUI = activeUI as ExtendedIstariUI;
+
     return new Promise((resolve) => {
-      activeTerminal.interject(`Report.show (Constant.typ (Namespace.resolve "${constant}"))`, (output) => {
+      extUI.interjectWithCallback(`Report.showType (parseLongident /${constant}/)`, (output: string) => {
         resolve({
           content: [
             {
@@ -362,15 +404,21 @@ export class IstariMCPServer {
             },
           ],
         });
+        return true;
       });
     });
   }
 
   private async getDefinition(constant: string): Promise<any> {
-    const { activeTerminal } = this.state;
-    
+    const { activeUI } = this.state;
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    const extUI = activeUI as ExtendedIstariUI;
+
     return new Promise((resolve) => {
-      activeTerminal.interject(`Report.showReduceOpt (Namespace.resolve "${constant}")`, (output) => {
+      extUI.interjectWithCallback(`Report.show (parseLongident /${constant}/)`, (output: string) => {
         resolve({
           content: [
             {
@@ -379,15 +427,21 @@ export class IstariMCPServer {
             },
           ],
         });
+        return true;
       });
     });
   }
 
   private async searchConstants(target: string): Promise<any> {
-    const { activeTerminal } = this.state;
-    
+    const { activeUI } = this.state;
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    const extUI = activeUI as ExtendedIstariUI;
+
     return new Promise((resolve) => {
-      activeTerminal.interject(`Report.showConstantsMentioning (Namespace.resolve "${target}")`, (output) => {
+      extUI.interjectWithCallback(`Report.search (parseConstants /${target}/) []`, (output: string) => {
         resolve({
           content: [
             {
@@ -396,49 +450,57 @@ export class IstariMCPServer {
             },
           ],
         });
+        return true;
       });
     });
   }
 
   private async nextLine(): Promise<any> {
     const { activeUI } = this.state;
-    
-    return new Promise((resolve) => {
-      activeUI.nextLine((output) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: `Moved to line ${activeUI.currentLine + 1}. ${output || 'Ready'}`,
-            },
-          ],
-        });
-      });
-    });
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    activeUI.nextLine();
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Moved to line ${activeUI.currentLine + 1}. Ready`,
+        },
+      ],
+    };
   }
 
   private async prevLine(): Promise<any> {
     const { activeUI } = this.state;
-    
-    return new Promise((resolve) => {
-      activeUI.prevLine((output) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: `Moved to line ${activeUI.currentLine + 1}. ${output || 'Ready'}`,
-            },
-          ],
-        });
-      });
-    });
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    activeUI.prevLine();
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Moved to line ${activeUI.currentLine + 1}. Ready`,
+        },
+      ],
+    };
   }
 
   private async interject(code: string): Promise<any> {
-    const { activeTerminal } = this.state;
-    
+    const { activeUI } = this.state;
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    const extUI = activeUI as ExtendedIstariUI;
+
     return new Promise((resolve) => {
-      activeTerminal.interject(code, (output) => {
+      extUI.interjectWithCallback(code, (output: string) => {
         resolve({
           content: [
             {
@@ -447,24 +509,28 @@ export class IstariMCPServer {
             },
           ],
         });
+        return true;
       });
     });
   }
 
   private async getDocumentStatus(): Promise<any> {
     const { activeUI, activeDocument } = this.state;
-    
+    if (!activeUI || !activeDocument) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI or document');
+    }
+
     return {
       content: [
         {
           type: 'text',
           text: JSON.stringify({
             fileName: activeDocument.fileName,
-            state: activeUI.state,
+            status: activeUI.status,
             currentLine: activeUI.currentLine + 1,
             requestedLine: activeUI.requestedLine + 1,
             totalLines: activeDocument.lineCount,
-            taskQueueLength: activeUI.terminal.taskQueueLength,
+            taskQueueLength: activeUI.terminal.tasks.length,
           }, null, 2),
         },
       ],
@@ -473,8 +539,12 @@ export class IstariMCPServer {
 
   private async getDiagnostics(): Promise<any> {
     const { activeDocument } = this.state;
+    if (!activeDocument) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active document');
+    }
+
     const diagnostics = vscode.languages.getDiagnostics(activeDocument.uri);
-    
+
     return {
       content: [
         {
@@ -498,8 +568,13 @@ export class IstariMCPServer {
 
   private async restartTerminal(): Promise<any> {
     const { activeUI } = this.state;
-    activeUI.restartTerminal();
-    
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    const extUI = activeUI as ExtendedIstariUI;
+    extUI.restartIstariTerminal();
+
     return {
       content: [
         {
@@ -512,8 +587,12 @@ export class IstariMCPServer {
 
   private async interrupt(): Promise<any> {
     const { activeUI } = this.state;
-    activeUI.interrupt();
-    
+    if (!activeUI) {
+      throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
+    }
+
+    activeUI.terminal.interrupt();
+
     return {
       content: [
         {

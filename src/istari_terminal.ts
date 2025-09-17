@@ -166,7 +166,7 @@ export class IstariTerminal {
 
     processOutput(data: Buffer) {
         this.debugLog("<<<< " + bufferToCaretString(data));
-        this.pendingOutput = Buffer.concat([this.pendingOutput, data]);
+        this.pendingOutput = Buffer.concat([this.pendingOutput, data] as any);
         this.processPendingOutput();
     }
 

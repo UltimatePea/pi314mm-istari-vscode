@@ -32,7 +32,7 @@ function registerDoc(doc: vscode.TextDocument, editor: vscode.TextEditor | undef
 					}
 				}
 			}
-			istariUIs.get(doc)?.revealWebview();
+			// Webview is only revealed on first creation, not on repeated selections
 		}
 
 	}
@@ -222,6 +222,7 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage('MCP server is already running');
 		}
 	}));
+
 
 	// LSP
 	startLSP();

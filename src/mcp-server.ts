@@ -704,6 +704,10 @@ export class IstariMCPServer {
     };
   }
 
+  public getState() {
+    return this.state;
+  }
+
   public async start() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);

@@ -1,4 +1,7 @@
 
+import * as vscode from 'vscode';
+import path = require('path');
+
 let webviewHTML = `
 			<script>
 			window.addEventListener('message', event => {
@@ -65,7 +68,7 @@ let webviewHTML = `
 			</body>
 			`;
 
-class IstariWebview {
+export class IstariWebview {
     webview: vscode.WebviewPanel;
     messages: any[] = [];
     constructor(document: vscode.TextDocument) {

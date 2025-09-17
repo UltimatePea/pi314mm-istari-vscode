@@ -1,43 +1,23 @@
-import { ChildProcess, spawn } from 'child_process';
-import { get } from 'http';
 import * as vscode from 'vscode';
-import { dirname } from 'path';
-import path = require('path');
-import { assert, time } from 'console';
-import * as fs from 'fs';
 import { IstariMCPServer } from './mcp-server';
+import { IstariUI } from './istari_ui';
+import { startLSP } from './istari_lsp';
+import { istariUIs, mcpServer, setMcpServer, getIstari } from './global';
 
-let istariUIs: Map<vscode.TextDocument, IstariUI> = new Map();
-let mcpServer: IstariMCPServer | undefined;
 
-function getIstari(): IstariUI | undefined {
-	let editor = vscode.window.activeTextEditor;
-	if (editor && editor.document.languageId === "istari") {
-		let istari = istariUIs.get(editor.document);
-		if (!istari) {
-			console.error("[f] Istari not found for the current active text file. Try save or reopen this file.", editor.document.fileName, istariUIs);
-			vscode.window.showInformationMessage("[B] Istari not found for the current active text file. Try save or reopen this file.");
-		}
-		return istari;
-	}
-	return undefined;
-}
-
-function getIstariForDocument(doc: vscode.TextDocument): IstariUI {
-	let istari = istariUIs.get(doc);
-	if (!istari) {
-		console.error("[e] Istari not found for the current active text file. Try save or reopen this file.", doc.fileName, istariUIs);
-		throw new Error("[e] Istari not found for the current active text file. Try save or reopen this file.");
-	}
-	return istari;
-}
 
 function registerDoc(doc: vscode.TextDocument, editor: vscode.TextEditor | undefined = undefined) {
 	if (doc.languageId === "istari") {
 		if (!istariUIs.has(doc)) {
 			const ui = new IstariUI(doc);
 			istariUIs.set(doc, ui);
-			// Set active context in MCP server if it exists
+
+			// Auto-start MCP server if it doesn't exist yet
+			if (!mcpServer) {
+				startMcpServer();
+			}
+
+			// Set active context in MCP server
 			if (mcpServer) {
 				mcpServer.setActiveContext(doc, ui, ui.terminal);
 			}
@@ -58,6 +38,27 @@ function registerDoc(doc: vscode.TextDocument, editor: vscode.TextEditor | undef
 	}
 }
 
+function startMcpServer() {
+	if (!mcpServer) {
+		const newServer = new IstariMCPServer();
+		setMcpServer(newServer);
+
+		// Set active context if there's an active Istari document
+		const activeEditor = vscode.window.activeTextEditor;
+		if (activeEditor && activeEditor.document.languageId === "istari") {
+			const ui = istariUIs.get(activeEditor.document);
+			if (ui) {
+				newServer.setActiveContext(activeEditor.document, ui, ui.terminal);
+			}
+		}
+
+		newServer.start().then(() => {
+			console.log('Istari MCP server started automatically');
+		}).catch((error: any) => {
+			console.error(`Failed to start MCP server: ${error.message}`);
+		});
+	}
+}
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -79,6 +80,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 	vscode.workspace.onDidCloseTextDocument((doc) => {
 		istariUIs.delete(doc);
+		// Remove from MCP server if it exists
+		if (mcpServer) {
+			mcpServer.removeDocument(doc);
+		}
 	});
 
 	vscode.window.visibleTextEditors.forEach((editor) => {
@@ -211,20 +216,8 @@ export function activate(context: vscode.ExtensionContext) {
 	// MCP Server
 	context.subscriptions.push(vscode.commands.registerCommand('istari.startMcpServer', () => {
 		if (!mcpServer) {
-			mcpServer = new IstariMCPServer();
-			// Set active context if there's an active Istari document
-			const activeEditor = vscode.window.activeTextEditor;
-			if (activeEditor && activeEditor.document.languageId === "istari") {
-				const ui = istariUIs.get(activeEditor.document);
-				if (ui) {
-					mcpServer.setActiveContext(activeEditor.document, ui, ui.terminal);
-				}
-			}
-			mcpServer.start().then(() => {
-				vscode.window.showInformationMessage('Istari MCP server started');
-			}).catch((error) => {
-				vscode.window.showErrorMessage(`Failed to start MCP server: ${error.message}`);
-			});
+			startMcpServer();
+			vscode.window.showInformationMessage('Istari MCP server started');
 		} else {
 			vscode.window.showInformationMessage('MCP server is already running');
 		}

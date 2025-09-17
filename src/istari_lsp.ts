@@ -1,3 +1,7 @@
+import * as vscode from 'vscode';
+import { getIstariForDocument, getIstari } from './global';
+
+
 type DocSymbolType = 'define' | 'lemma' | 'typedef' | 'defineInd' | "";
 type DocSymbol = {
     word: string,
@@ -152,7 +156,7 @@ function getCurrentSubject(document: vscode.TextDocument, position: vscode.Posit
     }
 }
 
-function startLSP() {
+export function startLSP() {
     // Signature help
     vscode.languages.registerSignatureHelpProvider('istari', {
         provideSignatureHelp(document, position, token, context) {
@@ -162,7 +166,7 @@ function startLSP() {
                 let istari = getIstariForDocument(document);
                 return new Promise((resolve, reject) => {
                     istari.getTypeForConstant(word,
-                        (data) => {
+                        (data: string) => {
                             let signatureHelp = new vscode.SignatureHelp();
                             let signature = new vscode.SignatureInformation(
                                 word,
@@ -198,12 +202,12 @@ function startLSP() {
             let allWords = [...new Set(document.getText().match(/[A-Za-z0-9._]+/g))];
             return new Promise((resolve, reject) => {
                 istari.interjectWithCallback("Report.showAll ();",
-                    (data) => {
+                    (data: string) => {
                         let istariWords = data.split("\n").filter((line) => !line.includes(" "));
-                        let completions = istariWords.map((line) => {
+                        let completions = istariWords.map((line: string) => {
                             return new vscode.CompletionItem(line, vscode.CompletionItemKind.Variable);
                         });
-                        let wordCompletions = allWords?.filter((word) => !istariWords.includes(word)).map((word) => {
+                        let wordCompletions = allWords?.filter((word: string) => !istariWords.includes(word)).map((word: string) => {
                             return new vscode.CompletionItem(word, vscode.CompletionItemKind.Constant);
                         }) ?? [];
                         resolve(completions.concat(wordCompletions));
@@ -217,7 +221,7 @@ function startLSP() {
             let itemName = item.label;
             return new Promise((resolve, reject) => {
                 istari?.getTypeAndDefinitionForConstant(itemName + "",
-                    (typeAndDefinition) => {
+                    (typeAndDefinition: string) => {
                         item.documentation = new vscode.MarkdownString().appendCodeblock(typeAndDefinition, "istari");
                         resolve(item);
                         return true;
@@ -238,7 +242,7 @@ function startLSP() {
             }
             return new Promise((resolve, reject) => {
                 istari.getTypeAndDefinitionForConstant(word,
-                    (typeAndDefinition) => {
+                    (typeAndDefinition: string) => {
                         resolve({
                             contents: [new vscode.MarkdownString().appendCodeblock(
                                 typeAndDefinition, "istari")]
@@ -276,7 +280,7 @@ function startLSP() {
 
                 let symbolDesc: string = shouldShowTypeDetails ? await new Promise(
                     (resolve, reject) => {
-                        istari.getTypeForConstant(word, (type) => {
+                        istari.getTypeForConstant(word, (type: string) => {
                             type = type.replace(/\s+/g, " ");
                             type = type.trim();
                             if (type.startsWith(word)) {

@@ -7,34 +7,26 @@ import {
   McpError
 } from '@modelcontextprotocol/sdk/types.js';
 import * as vscode from 'vscode';
-import { IstariTerminal, IstariUI } from './extension';
+import { IstariTerminal } from './istari_terminal';
+import { IstariUI } from './istari_ui';
 
 interface IstariMCPState {
   activeDocument?: vscode.TextDocument;
   activeUI?: IstariUI;
   activeTerminal?: IstariTerminal;
+  documents: Map<string, vscode.TextDocument>;
+  uis: Map<string, IstariUI>;
+  terminals: Map<string, IstariTerminal>;
 }
 
-interface IstariWebview {
-  messages: any[];
-}
-
-interface ExtendedIstariUI {
-  status: string;
-  currentLine: number;
-  requestedLine: number;
-  terminal: IstariTerminal;
-  webview?: IstariWebview;
-  interjectWithCallback(text: string, callback: (data: string) => boolean): void;
-  jumpToRequestedLine(): void;
-  restartIstariTerminal(): void;
-  nextLine(): void;
-  prevLine(): void;
-}
 
 export class IstariMCPServer {
   private server: Server;
-  private state: IstariMCPState = {};
+  private state: IstariMCPState = {
+    documents: new Map(),
+    uis: new Map(),
+    terminals: new Map()
+  };
 
   constructor() {
     this.server = new Server(
@@ -208,6 +200,28 @@ export class IstariMCPServer {
             properties: {},
           },
         },
+        {
+          name: 'list_documents',
+          description: 'List all open Istari documents',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+        {
+          name: 'switch_document',
+          description: 'Switch to a different Istari document',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              filename: {
+                type: 'string',
+                description: 'The filename of the document to switch to',
+              },
+            },
+            required: ['filename'],
+          },
+        },
       ],
     }));
 
@@ -265,6 +279,12 @@ export class IstariMCPServer {
           case 'interrupt':
             return await this.interrupt();
 
+          case 'list_documents':
+            return await this.listDocuments();
+
+          case 'switch_document':
+            return await this.switchDocument((args as any).filename);
+
           default:
             throw new McpError(
               ErrorCode.MethodNotFound,
@@ -284,9 +304,31 @@ export class IstariMCPServer {
   }
 
   public setActiveContext(document: vscode.TextDocument, ui: IstariUI, terminal: IstariTerminal) {
+    const filename = document.fileName;
+
+    // Store in collections
+    this.state.documents.set(filename, document);
+    this.state.uis.set(filename, ui);
+    this.state.terminals.set(filename, terminal);
+
+    // Set as active
     this.state.activeDocument = document;
     this.state.activeUI = ui;
     this.state.activeTerminal = terminal;
+  }
+
+  public removeDocument(document: vscode.TextDocument) {
+    const filename = document.fileName;
+    this.state.documents.delete(filename);
+    this.state.uis.delete(filename);
+    this.state.terminals.delete(filename);
+
+    // If this was the active document, clear active state
+    if (this.state.activeDocument?.fileName === filename) {
+      this.state.activeDocument = undefined;
+      this.state.activeUI = undefined;
+      this.state.activeTerminal = undefined;
+    }
   }
 
   private async gotoLine(line: number): Promise<any> {
@@ -295,15 +337,14 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const extUI = activeUI as ExtendedIstariUI;
-    extUI.requestedLine = line;
-    extUI.jumpToRequestedLine();
+    activeUI.requestedLine = line;
+    activeUI.jumpToRequestedLine();
 
     return {
       content: [
         {
           type: 'text',
-          text: `Navigated to line ${line}. Status: ${extUI.status}`,
+          text: `Navigated to line ${line}. Status: ${activeUI.status}`,
         },
       ],
     };
@@ -315,8 +356,7 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const extUI = activeUI as ExtendedIstariUI;
-    const messages = extUI.webview?.messages || [];
+    const messages = activeUI.webview?.messages || [];
     const latestMessage = messages[messages.length - 1] || {};
 
     return {
@@ -324,11 +364,11 @@ export class IstariMCPServer {
         {
           type: 'text',
           text: JSON.stringify({
-            status: extUI.status,
-            currentLine: extUI.currentLine + 1,
-            requestedLine: extUI.requestedLine + 1,
+            status: activeUI.status,
+            currentLine: activeUI.currentLine + 1,
+            requestedLine: activeUI.requestedLine + 1,
             output: latestMessage.text || 'No output available',
-            taskQueueLength: extUI.terminal.tasks.length,
+            taskQueueLength: activeUI.terminal.tasks.length,
           }, null, 2),
         },
       ],
@@ -341,11 +381,9 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const extUI = activeUI as ExtendedIstariUI;
-
     return new Promise((resolve) => {
       const command = verbose ? 'Prover.showFull ()' : 'Prover.show ()';
-      extUI.interjectWithCallback(command, (output: string) => {
+      activeUI.interjectWithCallback(command, (output: string) => {
         resolve({
           content: [
             {
@@ -365,14 +403,12 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const extUI = activeUI as ExtendedIstariUI;
-
     return new Promise((resolve) => {
       const command = module
         ? `Report.showModule (parseLongident /${module}/)`
         : 'Report.showAll ()';
 
-      extUI.interjectWithCallback(command, (output: string) => {
+      activeUI.interjectWithCallback(command, (output: string) => {
         resolve({
           content: [
             {
@@ -392,10 +428,8 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const extUI = activeUI as ExtendedIstariUI;
-
     return new Promise((resolve) => {
-      extUI.interjectWithCallback(`Report.showType (parseLongident /${constant}/)`, (output: string) => {
+      activeUI.interjectWithCallback(`Report.showType (parseLongident /${constant}/)`, (output: string) => {
         resolve({
           content: [
             {
@@ -415,10 +449,8 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const extUI = activeUI as ExtendedIstariUI;
-
     return new Promise((resolve) => {
-      extUI.interjectWithCallback(`Report.show (parseLongident /${constant}/)`, (output: string) => {
+      activeUI.interjectWithCallback(`Report.show (parseLongident /${constant}/)`, (output: string) => {
         resolve({
           content: [
             {
@@ -438,10 +470,8 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const extUI = activeUI as ExtendedIstariUI;
-
     return new Promise((resolve) => {
-      extUI.interjectWithCallback(`Report.search (parseConstants /${target}/) []`, (output: string) => {
+      activeUI.interjectWithCallback(`Report.search (parseConstants /${target}/) []`, (output: string) => {
         resolve({
           content: [
             {
@@ -497,10 +527,8 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const extUI = activeUI as ExtendedIstariUI;
-
     return new Promise((resolve) => {
-      extUI.interjectWithCallback(code, (output: string) => {
+      activeUI.interjectWithCallback(code, (output: string) => {
         resolve({
           content: [
             {
@@ -572,8 +600,7 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const extUI = activeUI as ExtendedIstariUI;
-    extUI.restartIstariTerminal();
+    activeUI.restartIstariTerminal();
 
     return {
       content: [
@@ -598,6 +625,80 @@ export class IstariMCPServer {
         {
           type: 'text',
           text: 'Istari execution interrupted',
+        },
+      ],
+    };
+  }
+
+  private async listDocuments(): Promise<any> {
+    const documents = Array.from(this.state.documents.entries()).map(([filename, doc]) => {
+      const ui = this.state.uis.get(filename);
+      const isActive = this.state.activeDocument?.fileName === filename;
+
+      return {
+        filename: filename,
+        basename: filename.split(/[/\\]/).pop() || filename,
+        isActive: isActive,
+        status: ui?.status || 'unknown',
+        currentLine: ui?.currentLine || 0,
+        totalLines: doc.lineCount
+      };
+    });
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            documents: documents,
+            activeDocument: this.state.activeDocument?.fileName || null,
+            totalDocuments: documents.length
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async switchDocument(filename: string): Promise<any> {
+    // Try to find the document by exact match first
+    let targetDocument = this.state.documents.get(filename);
+    let targetUI = this.state.uis.get(filename);
+    let targetTerminal = this.state.terminals.get(filename);
+
+    // If not found, try to find by basename
+    if (!targetDocument) {
+      for (const [path, doc] of this.state.documents.entries()) {
+        const basename = path.split(/[/\\]/).pop() || path;
+        if (basename === filename) {
+          targetDocument = doc;
+          targetUI = this.state.uis.get(path);
+          targetTerminal = this.state.terminals.get(path);
+          break;
+        }
+      }
+    }
+
+    if (!targetDocument || !targetUI || !targetTerminal) {
+      const availableFiles = Array.from(this.state.documents.keys()).map(path =>
+        path.split(/[/\\]/).pop() || path
+      );
+
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `Document '${filename}' not found. Available documents: ${availableFiles.join(', ')}`
+      );
+    }
+
+    // Switch to the target document
+    this.state.activeDocument = targetDocument;
+    this.state.activeUI = targetUI;
+    this.state.activeTerminal = targetTerminal;
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Switched to document: ${targetDocument.fileName}\nStatus: ${targetUI.status}\nCurrent line: ${targetUI.currentLine}\nTotal lines: ${targetDocument.lineCount}`,
         },
       ],
     };

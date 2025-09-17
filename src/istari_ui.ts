@@ -1,4 +1,9 @@
 
+import * as vscode from 'vscode';
+import path = require('path');
+import { IstariTerminal, IstariTask, IstariInputCommand, IstariCommand } from './istari_terminal';
+import { IstariWebview } from './istari_webview';
+
 const decorationBlueArrowGutter = vscode.window.createTextEditorDecorationType({
     gutterIconPath: vscode.Uri.file(path.join(__dirname, '..', 'media', 'blue-dot.svg')),
     // gutterIconPath: vscode.Uri.file(path.join(__dirname, '..', 'media', 'green-bar.svg')),
@@ -65,7 +70,7 @@ export class IstariUI {
         this.document = document;
         let editor = vscode.window.visibleTextEditors.find(x => x.document === this.document);
         if (!editor) {
-            console.error("[c] Istari not found for the current active text file. Try save or reopen this file.", this.document.fileName, istariUIs);
+            console.error("[c] Istari not found for the current active text file. Try save or reopen this file.", this.document.fileName);
             vscode.window.showInformationMessage("[C] Istari not found for the current active text file. Try save or reopen this file.");
             throw new Error("[e] Istari not found for the current active text file. Try save or reopen this file.");
         }

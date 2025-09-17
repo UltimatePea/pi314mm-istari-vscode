@@ -1,4 +1,9 @@
 
+import { ChildProcess, spawn } from 'child_process';
+import * as vscode from 'vscode';
+import { dirname } from 'path';
+import * as fs from 'fs';
+
 function bufferToCaretString(buffer: Buffer) {
     return Array.from(buffer)
         .map(byte => {
@@ -13,13 +18,13 @@ function bufferToCaretString(buffer: Buffer) {
 }
 
 
-enum IstariInputCommand {
+export enum IstariInputCommand {
     textInput = "t",
     interject = "i",
     rewind = "r",
 }
 
-enum IstariCommand {
+export enum IstariCommand {
     textOutput = "t",
     lineNumber = "c",
     working = "w",
@@ -27,7 +32,7 @@ enum IstariCommand {
     ready = "r",
 }
 
-class IstariTask {
+export class IstariTask {
     callback: (data: string) => boolean; // return true to complete this task by removing it from the queue
     data: string;
     cmd: IstariInputCommand;
@@ -78,7 +83,7 @@ export class IstariTerminal {
         if (this.proc.kill('SIGINT')) {
             // wait 0.01 seconds
             setTimeout(() => {
-                this.writeStdIn("RecoverRepl.recover ();\n")
+                this.writeStdIn("RecoverRepl.recover ();\n");
             }, 10);
         }
     }

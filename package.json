@@ -298,6 +298,9 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts"
   },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
   "devDependencies": {
     "@types/vscode": "^1.93.0",
     "@types/glob": "^7.2.0",

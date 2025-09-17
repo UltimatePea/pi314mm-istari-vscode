@@ -1,31 +1,24 @@
 import * as vscode from 'vscode';
 import { IstariMCPServer } from './mcp-server';
-import { IstariUI } from './istari_ui';
 import { startLSP } from './istari_lsp';
-import { istariUIs, mcpServer, setMcpServer, getIstari, registerIstari } from './global';
+import { istariUIs, mcpServer, setMcpServer, getIstari, getOrCreateIstariUI } from './global';
 
 
 
 function registerDoc(doc: vscode.TextDocument, editor: vscode.TextEditor | undefined = undefined) {
 	if (doc.languageId === "istari") {
-		if (!istariUIs.has(doc)) {
-			const ui = new IstariUI(doc);
-			registerIstari(doc, ui);
+		// This will either get existing UI or create new one
+		const ui = getOrCreateIstariUI(doc);
 
-			// Auto-start MCP server if it doesn't exist yet
-			if (!mcpServer) {
-				startMcpServer();
-			}
-		} else {
-			if (editor) {
-				let ui = istariUIs.get(doc);
-				if (ui) {
-					ui.setEditor(editor);
-				}
-			}
-			// Webview is only revealed on first creation, not on repeated selections
+		// Update editor if provided
+		if (editor) {
+			ui.setEditor(editor);
 		}
 
+		// Auto-start MCP server if it doesn't exist yet
+		if (!mcpServer) {
+			startMcpServer();
+		}
 	}
 }
 

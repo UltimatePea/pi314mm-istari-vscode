@@ -17,12 +17,24 @@ export let mcpServer: IstariMCPServer | undefined;
 
 let nextDocumentId = 1;
 
-export function registerIstari(document: vscode.TextDocument, ui: IstariUI): void {
+export function getOrCreateIstariUI(document: vscode.TextDocument): IstariUI {
     const uri = document.uri.toString();
 
-    // Create or update document entry
+    // Check if UI already exists for this URI
+    const existingDoc = istariDocuments.get(uri);
+    if (existingDoc) {
+        // Update the document reference in case it changed
+        existingDoc.document = document;
+        istariUIs.set(document, existingDoc.ui);
+        return existingDoc.ui;
+    }
+
+    // Create new UI only if it doesn't exist
+    const ui = new IstariUI(document);
+
+    // Create document entry
     const istariDoc: IstariDocument = {
-        id: istariDocuments.get(uri)?.id || nextDocumentId++,
+        id: nextDocumentId++,
         uri: uri,
         ui: ui,
         document: document
@@ -36,6 +48,8 @@ export function registerIstari(document: vscode.TextDocument, ui: IstariUI): voi
     if (mcpServer) {
         mcpServer.updateDocument(istariDoc);
     }
+
+    return ui;
 }
 
 export function getIstariDocumentByUri(uri: string): IstariDocument | undefined {

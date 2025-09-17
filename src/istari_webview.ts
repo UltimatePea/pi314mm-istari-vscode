@@ -1,8 +1,7 @@
 
 import * as vscode from 'vscode';
-import path = require('path');
 
-let webviewHTML = `
+export let webviewHTML = `
 			<script>
 			window.addEventListener('message', event => {
 				const message = event.data;
@@ -70,59 +69,28 @@ let webviewHTML = `
 
 export class IstariWebview {
     webview: vscode.WebviewPanel;
-    messages: any[] = [];
-    constructor(document: vscode.TextDocument) {
+
+    constructor(title: string, onDispose: () => void) {
         this.webview = vscode.window.createWebviewPanel("istari",
-            path.basename(document.fileName),
-            vscode.ViewColumn.Beside, // Create in active column but don't show
+            title,
+            vscode.ViewColumn.Beside,
             {
                 enableScripts: true,
                 retainContextWhenHidden: true
             });
         this.webview.webview.html = webviewHTML;
 
-        // Show notification with button to open webview
-        vscode.window.showInformationMessage(
-            `Istari session started for ${path.basename(document.fileName)}`,
-            'Open Webview'
-        ).then(selection => {
-            if (selection === 'Open Webview') {
-                this.webview.reveal(vscode.ViewColumn.Beside, false);
-            }
+        // Handle disposal
+        this.webview.onDidDispose(() => {
+            onDispose();
         });
     }
 
     postMessage(message: any) {
-        if (message.command === 'appendText') {
-            this.messages.push(message);
-            if (this.messages.length > 100) {
-                this.messages.shift();
-            }
-        }
         this.webview.webview.postMessage(message);
     }
 
-    resetText() {
-        this.messages = [];
-        this.postMessage({ command: 'resetText' });
+    reveal() {
+        this.webview.reveal(vscode.ViewColumn.Beside, false);
     }
-
-
-    appendText(text: string) {
-        this.postMessage({ command: 'appendText', text: text });
-        this.postMessage({ command: 'scrollToBottom' });
-    }
-
-    changeStatus(text: string) {
-        this.postMessage({ command: 'changeStatus', text: text });
-    }
-
-    changeTasks(text: string) {
-        this.postMessage({ command: 'changeTasks', text: text });
-    }
-
-    changeCursor(text: string) {
-        this.postMessage({ command: 'changeCursor', text: text });
-    }
-
 }

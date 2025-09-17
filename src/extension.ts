@@ -226,7 +226,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('istari.showWebview', () => {
 		let istari = getIstari();
 		if (istari) {
-			istari.webview.webview.reveal(vscode.ViewColumn.Beside, false);
+			istari.webview.showWebview();
 		} else {
 			vscode.window.showInformationMessage('No active Istari document. Open an .ist file first.');
 		}

@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 import path = require('path');
 import { IstariTerminal, IstariTask, IstariInputCommand, IstariCommand } from './istari_terminal';
-import { IstariWebview } from './istari_webview';
+import { IstariWebviewState } from './istari_webview_state';
 
 const decorationBlueArrowGutter = vscode.window.createTextEditorDecorationType({
     gutterIconPath: vscode.Uri.file(path.join(__dirname, '..', 'media', 'blue-dot.svg')),
@@ -61,7 +61,7 @@ export class IstariUI {
     currentLine: number;
     requestedLine: number;
     status: "ready" | "working" | "partialReady";
-    webview: IstariWebview;
+    webview: IstariWebviewState;
     diagnostics: vscode.DiagnosticCollection;
 
     editor: vscode.TextEditor;
@@ -75,7 +75,7 @@ export class IstariUI {
             throw new Error("[e] Istari not found for the current active text file. Try save or reopen this file.");
         }
         this.editor = editor;
-        this.webview = new IstariWebview(document);
+        this.webview = new IstariWebviewState(document);
         this.currentLine = 1;
         this.requestedLine = 1;
         this.status = "ready";
@@ -234,10 +234,6 @@ export class IstariUI {
                 break;
             }
         }
-    }
-
-    revealWebview() {
-        this.webview.webview.reveal(vscode.ViewColumn.Beside, true);
     }
 
     interject(text: string) {

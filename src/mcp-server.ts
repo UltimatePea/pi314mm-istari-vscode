@@ -362,7 +362,7 @@ export class IstariMCPServer {
       throw new McpError(ErrorCode.InvalidRequest, 'No active UI');
     }
 
-    const messages = activeUI.webview?.messages || [];
+    const messages = activeUI.webview?.messageHistory || [];
     const latestMessage = messages[messages.length - 1] || {};
 
     return {

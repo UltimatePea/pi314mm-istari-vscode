@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import path = require('path');
 import { IstariWebview } from './istari_webview';
+import { getIstariDocumentByUri } from './global';
 
 export class IstariWebviewState {
     private document: vscode.TextDocument;
@@ -14,8 +15,10 @@ export class IstariWebviewState {
         this.document = document;
 
         // Show notification when state is created
+        const istariDoc = getIstariDocumentByUri(document.uri.toString());
+        const docIdStr = istariDoc?.id ? ` (ID: ${istariDoc.id})` : '';
         vscode.window.showInformationMessage(
-            `Istari session started for ${path.basename(document.fileName)}`,
+            `Istari session started for ${path.basename(document.fileName)}${docIdStr}`,
             'Open Webview'
         ).then(selection => {
             if (selection === 'Open Webview') {
@@ -35,8 +38,10 @@ export class IstariWebviewState {
     }
 
     private createWebview(): void {
+        const istariDoc = getIstariDocumentByUri(this.document.uri.toString());
+        const docIdStr = istariDoc?.id ? ` (ID: ${istariDoc.id})` : '';
         this.webview = new IstariWebview(
-            path.basename(this.document.fileName),
+            `${path.basename(this.document.fileName)}${docIdStr}`,
             () => {
                 // Handle disposal - set webview to null
                 this.webview = null;

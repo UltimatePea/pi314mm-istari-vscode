@@ -169,6 +169,11 @@
       {
         "command": "istari.showWebview",
         "title": "Istari: Show Webview"
+      },
+      {
+        "command": "istari.attemptTactic",
+        "title": "Istari: Attempt Tactic (Debug)",
+        "icon": "$(debug-step-into)"
       }
     ],
     "keybindings": [
@@ -270,6 +275,11 @@
       {
         "command": "istari.showSubstitutions",
         "key": "ctrl+i c s",
+        "when": "resourceLangId == istari"
+      },
+      {
+        "command": "istari.attemptTactic",
+        "key": "ctrl+i a",
         "when": "resourceLangId == istari"
       }
     ],

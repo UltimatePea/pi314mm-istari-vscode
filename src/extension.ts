@@ -248,6 +248,38 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	}));
 
+	context.subscriptions.push(vscode.commands.registerCommand('istari.attemptTactic', () => {
+		vscode.window.showInputBox({
+			title: "Attempt a tactic at current line",
+			prompt: "Tactic to try (will be inserted, tested, and kept if successful or rolled back if failed)",
+			ignoreFocusOut: true
+		}).then(async (tactic) => {
+			if (tactic) {
+				let istari = getCurrentIstari();
+				if (istari) {
+					try {
+						istari.editor.document.save();
+						const result = await IstariHelper.attemptTactic(istari, tactic);
+
+						if (result.success) {
+							vscode.window.showInformationMessage(
+								`✅ Tactic succeeded! Line advanced from ${result.proofState?.currentLine - 1} to ${result.proofState?.currentLine}`
+							);
+						} else {
+							vscode.window.showWarningMessage(
+								`❌ Tactic failed: ${result.error}`
+							);
+						}
+					} catch (error) {
+						vscode.window.showErrorMessage(
+							`Error attempting tactic: ${error instanceof Error ? error.message : error}`
+						);
+					}
+				}
+			}
+		});
+	}));
+
 	// MCP Server
 	context.subscriptions.push(vscode.commands.registerCommand('istari.startMcpServer', () => {
 		if (!mcpServer) {

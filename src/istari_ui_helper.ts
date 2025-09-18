@@ -137,3 +137,89 @@ export function getCurrentOutput(istari: IstariUI): any {
         taskQueueLength: istari.terminal.tasks.length,
     };
 }
+
+export async function attemptTactic(istari: IstariUI, tactic: string): Promise<{
+    success: boolean;
+    fileChanged: boolean;
+    proofState?: any;
+    error?: string;
+}> {
+    try {
+        const document = istari.getDocument();
+        const initialCurrentLine = istari.currentLine;
+
+        // Get the current line content to know where to insert
+        const currentLineIndex = istari.currentLine - 1; // Convert to 0-based
+
+        // Insert the tactic at the beginning of the current line, followed by newline
+        const edit = new vscode.WorkspaceEdit();
+        const insertPosition = new vscode.Position(currentLineIndex, 0);
+        edit.insert(document.uri, insertPosition, tactic + '\n');
+
+        // Apply the edit
+        const editSuccess = await vscode.workspace.applyEdit(edit);
+        if (!editSuccess) {
+            return {
+                success: false,
+                fileChanged: false,
+                error: 'Failed to insert tactic into document'
+            };
+        }
+
+        // Now try to advance to the next line to verify the proof
+        try {
+            const result = await nextLine(istari);
+
+            // Check if the line actually moved (success condition)
+            if (istari.currentLine > initialCurrentLine) {
+                // Success: tactic worked, line moved, keep the change
+                const proofState = getDocumentStatus(istari);
+                return {
+                    success: true,
+                    fileChanged: true,
+                    proofState: proofState
+                };
+            } else {
+                // Line didn't move, so tactic failed - rollback
+                await rollbackTacticInsertion(document, currentLineIndex);
+
+                return {
+                    success: false,
+                    fileChanged: false,
+                    error: result || 'Tactic failed: line did not advance'
+                };
+            }
+        } catch (tacticError) {
+            // Error during tactic execution - rollback
+            await rollbackTacticInsertion(document, currentLineIndex);
+
+            return {
+                success: false,
+                fileChanged: false,
+                error: `Tactic execution failed: ${tacticError instanceof Error ? tacticError.message : tacticError}`
+            };
+        }
+
+    } catch (error) {
+        return {
+            success: false,
+            fileChanged: false,
+            error: `Attempt tactic failed: ${error instanceof Error ? error.message : error}`
+        };
+    }
+}
+
+async function rollbackTacticInsertion(document: vscode.TextDocument, lineIndex: number): Promise<void> {
+    try {
+        // Remove the inserted line
+        const edit = new vscode.WorkspaceEdit();
+        const lineToRemove = new vscode.Range(
+            new vscode.Position(lineIndex, 0),
+            new vscode.Position(lineIndex + 1, 0)
+        );
+        edit.delete(document.uri, lineToRemove);
+        await vscode.workspace.applyEdit(edit);
+    } catch (rollbackError) {
+        console.error('Failed to rollback tactic insertion:', rollbackError);
+    }
+}

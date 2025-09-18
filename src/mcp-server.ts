@@ -254,6 +254,24 @@ export class IstariMCPServer {
             required: [],
           },
         },
+        {
+          name: 'attempt_tactic',
+          description: 'Try a tactic at the current line, insert it, verify it works by calling nextline, and either keep it (if line advances) or rollback (if it fails)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              document_id: {
+                type: 'number',
+                description: 'The document ID to operate on',
+              },
+              tactic: {
+                type: 'string',
+                description: 'The tactic to attempt',
+              },
+            },
+            required: ['document_id', 'tactic'],
+          },
+        },
       ],
     }));
 
@@ -306,6 +324,9 @@ export class IstariMCPServer {
 
           case 'restart_mcp_server':
             return await this.restartMcpServer();
+
+          case 'attempt_tactic':
+            return await this.attemptTactic((args as any).document_id, (args as any).tactic);
 
           default:
             throw new McpError(
@@ -716,6 +737,25 @@ export class IstariMCPServer {
         {
           type: 'text',
           text: 'MCP server restart initiated. The server will be stopped and restarted momentarily.',
+        },
+      ],
+    };
+  }
+
+  private async attemptTactic(documentId: number, tactic: string): Promise<any> {
+    const doc = this.getDocumentById(documentId);
+    const result = await IstariHelper.attemptTactic(doc.ui, tactic);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            success: result.success,
+            fileChanged: result.fileChanged,
+            proofState: result.proofState,
+            error: result.error
+          }, null, 2),
         },
       ],
     };

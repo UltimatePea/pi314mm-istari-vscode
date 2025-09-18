@@ -190,24 +190,6 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'interject',
-          description: 'Execute arbitrary IML code',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              document_id: {
-                type: 'number',
-                description: 'The document ID to operate on',
-              },
-              code: {
-                type: 'string',
-                description: 'The IML code to execute',
-              },
-            },
-            required: ['document_id', 'code'],
-          },
-        },
-        {
           name: 'get_document_status',
           description: 'Get the current status of an Istari document',
           inputSchema: {
@@ -309,9 +291,6 @@ export class IstariMCPServer {
 
           case 'prev_line':
             return await this.prevLine((args as any).document_id);
-
-          case 'interject':
-            return await this.interject((args as any).document_id, (args as any).code);
 
           case 'get_document_status':
             return await this.getDocumentStatus((args as any).document_id);
@@ -494,20 +473,6 @@ export class IstariMCPServer {
   private async prevLine(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
     const output = await IstariHelper.prevLine(doc.ui);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: output,
-        },
-      ],
-    };
-  }
-
-  private async interject(documentId: number, code: string): Promise<any> {
-    const doc = this.getDocumentById(documentId);
-    const output = await IstariHelper.interject(doc.ui, code);
 
     return {
       content: [

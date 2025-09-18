@@ -45,8 +45,8 @@ function startMcpServer() {
 export function activate(context: vscode.ExtensionContext) {
 
 	// listen for file open on istari langauge files
-	vscode.workspace.onDidOpenTextDocument((doc) => {
-		registerDoc(doc);
+	vscode.workspace.onDidOpenTextDocument((_doc) => {
+		// registerDoc(doc);
 	});
 
 	vscode.window.onDidChangeActiveTextEditor((editor) => {
@@ -60,8 +60,8 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 	);
 
-	vscode.workspace.onDidSaveTextDocument((doc) => {
-		registerDoc(doc);
+	vscode.workspace.onDidSaveTextDocument((_doc) => {
+		// registerDoc(doc);
 	});
 
 	vscode.workspace.onDidCloseTextDocument((_doc) => {
@@ -71,6 +71,14 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.window.visibleTextEditors.forEach((editor) => {
 		registerDoc(editor.document);
 	});
+
+	// Set current Istari URI for active editor on activation
+	const activeEditor = vscode.window.activeTextEditor;
+	if (activeEditor && activeEditor.document.languageId === "istari") {
+		registerDoc(activeEditor.document, activeEditor);
+		setCurrentIstariUri(activeEditor.document.uri.toString());
+	}
+
 
 	vscode.workspace.onDidChangeTextDocument(e => {
 		if (e.document.languageId === "istari") {
@@ -204,6 +212,29 @@ export function activate(context: vscode.ExtensionContext) {
 		} else {
 			vscode.window.showInformationMessage('MCP server is already running');
 		}
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('istari.installClaudeMcp', () => {
+		const command = 'claude mcp add istari-vscode http://localhost:47821/mcp -s user -t http';
+
+		vscode.window.showInformationMessage(
+			`This will run: ${command}`,
+			'Install', 'Cancel'
+		).then(selection => {
+			if (selection === 'Install') {
+				// Start MCP server if not running
+				if (!mcpServer) {
+					startMcpServer();
+				}
+
+				// Execute the Claude MCP install command
+				const terminal = vscode.window.createTerminal('Claude MCP Install');
+				terminal.show();
+				terminal.sendText(command);
+
+				vscode.window.showInformationMessage('Claude MCP installation command executed. Check terminal for results.');
+			}
+		});
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.showWebview', () => {

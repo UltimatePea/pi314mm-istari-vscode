@@ -410,7 +410,7 @@ export class IstariMCPServer {
   private async gotoLine(documentId: number, line: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
     doc.ui.requestedLine = line;
-    doc.ui.jumpToRequestedLine();
+    doc.ui.jumpToRequestedLine('mcp');
 
     return {
       content: [

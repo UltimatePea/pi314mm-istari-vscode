@@ -13,14 +13,26 @@ export let webviewHTML = `
 						const mainText = document.getElementById('main_text');
 						if (mainText) {
 							const new_hr = document.createElement("hr");
+							const new_div = document.createElement("div");
 							const new_pre = document.createElement("pre");
-							m = message.text; 
+
+							// Add reason indicator if present
+							if (message.reason && message.reason !== 'output') {
+								const reasonSpan = document.createElement("span");
+								reasonSpan.textContent = '[' + message.reason.toUpperCase() + '] ';
+								reasonSpan.style.fontWeight = 'bold';
+								reasonSpan.style.color = message.reason.startsWith('mcp') ? '#ff6b35' : '#4a90e2';
+								new_div.appendChild(reasonSpan);
+							}
+
+							m = message.text;
 							// Optionally "Clean up" the message
 							// m = m.replace(/\\n(\=+)/g, "");
 							// m = m.replace(/\\n(\-+)/g, "");
 							new_pre.textContent = m.trim();
+							new_div.appendChild(new_pre);
 							main_text.appendChild(new_hr);
-							main_text.appendChild(new_pre);
+							main_text.appendChild(new_div);
 						}
 						break;
 					}

@@ -65,6 +65,8 @@ export function getCurrentIstari(): IstariUI | undefined {
         return getIstariByUri(currentIstariUri);
     }
     // No current Istari document selected
+    // issue a warning notification
+    vscode.window.showWarningMessage('No Istari document selected');
     return undefined;
 }
 

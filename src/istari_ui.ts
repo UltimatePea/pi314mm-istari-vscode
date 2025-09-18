@@ -133,7 +133,7 @@ export class IstariUI {
     defaultCallback(cmd: IstariCommand, data: string) {
         switch (cmd) {
             case IstariCommand.textOutput: {
-                this.webview.appendText(data);
+                this.webview.appendText(data, 'output');
                 break;
             }
             case IstariCommand.lineNumber: {
@@ -170,7 +170,7 @@ export class IstariUI {
         // console.log("Interjecting: ", text);
         // this.write_stdin('\x02' + text + '\n');
         this.terminal.enqueueTask(new IstariTask(IstariInputCommand.interject, text, (data) => {
-            this.webview.appendText(data);
+            this.webview.appendText(data, 'interject');
             return true;
         }));
     }
@@ -197,15 +197,15 @@ export class IstariUI {
         // });
     }
 
-    sendLines(text: string) {
+    sendLines(text: string, source: 'user' | 'mcp' = 'user') {
         this.terminal.enqueueTask(new IstariTask(IstariInputCommand.textInput, text, (data) => {
-            this.webview.appendText(data);
+            this.webview.appendText(data, `${source}-jump-to-${this._requestedLine}`);
             this.respondToSendLineResponse(data);
             return true;
         }));
     }
 
-    rewindToLine(line: number) {
+    rewindToLine(line: number, source: 'user' | 'mcp' = 'user') {
         // When rewinding, update the cache to reflect the new state
         if (line > 1) {
             // Keep only the lines that will remain checked after rewind
@@ -214,12 +214,12 @@ export class IstariUI {
             this._checkedLinesCache = [];
         }
         this.terminal.enqueueTask(new IstariTask(IstariInputCommand.rewind, line.toString(), (data) => {
-            this.webview.appendText(data);
+            this.webview.appendText(data, `${source}-rewind-to-${line}`);
             return true;
         }));
     }
 
-    jumpToRequestedLine() {
+    jumpToRequestedLine(source: 'user' | 'mcp' = 'user') {
         // Check if the cached content matches the current document
         if (this._checkedLinesCache.length > 0) {
             // Find the last line where content still matches
@@ -241,7 +241,7 @@ export class IstariUI {
 
             // Rewind if we're ahead of the last valid line
             if (validLine < this._currentLine) {
-                this.rewindToLine(validLine);
+                this.rewindToLine(validLine, source);
                 this._requestedLine = Math.max(validLine, this._requestedLine);
                 return;
             }
@@ -249,9 +249,9 @@ export class IstariUI {
 
         if (this._requestedLine > this._currentLine) {
             let text = this.istariEditor.getTextRange(this._currentLine - 1, this._requestedLine - 1);
-            this.sendLines(text);
+            this.sendLines(text, source);
         } else if (this._requestedLine < this._currentLine) {
-            this.rewindToLine(this._requestedLine);
+            this.rewindToLine(this._requestedLine, source);
         } else if (this._requestedLine === this._currentLine && vscode.workspace.getConfiguration().get<boolean>('istari.continueJumpingForward')?.valueOf()) {
             // special: if we already jumped to the requested line, just jump the next line past ;
             // currentLine and requestedLine is 1 indexed, nextline is zero-indexed
@@ -265,7 +265,7 @@ export class IstariUI {
             }
             if (nextline + 1 !== this._requestedLine) {
                 this._requestedLine = nextline + 1;
-                this.jumpToRequestedLine();
+                this.jumpToRequestedLine(source);
             }
         }
     }
@@ -273,14 +273,14 @@ export class IstariUI {
     jumpToCursor() {
         let cursorLine = this.istariEditor.getCursorLine();
         this._requestedLine = cursorLine + 1;
-        this.jumpToRequestedLine();
+        this.jumpToRequestedLine('user');
     }
 
     nextLine() {
         console.log("nextLine not implemented");
         if (this._currentLine < this.istariEditor.lineCount) {
             let text = this.istariEditor.getTextRange(this._currentLine - 1, this._currentLine);
-            this.sendLines(text);
+            this.sendLines(text, 'user');
         } else {
             console.log("error");
         }
@@ -289,7 +289,7 @@ export class IstariUI {
     prevLine() {
         console.log("prevLine not implemented");
         if (this._currentLine > 1) {
-            this.rewindToLine(this._currentLine - 1);
+            this.rewindToLine(this._currentLine - 1, 'user');
         } else {
             console.log("error");
         }
@@ -308,7 +308,7 @@ export class IstariUI {
                 ) {
                     return;
                 }
-                this.rewindToLine(e.contentChanges[0].range.start.line + 1);
+                this.rewindToLine(e.contentChanges[0].range.start.line + 1, 'user');
             }
         }
     }

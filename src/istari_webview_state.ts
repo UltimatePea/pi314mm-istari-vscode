@@ -90,8 +90,8 @@ export class IstariWebviewState {
         }
     }
 
-    public appendText(text: string): void {
-        const message = { command: 'appendText', text: text };
+    public appendText(text: string, reason?: string): void {
+        const message = { command: 'appendText', text: text, reason: reason || 'output' };
         this.messages.push(message);
         if (this.messages.length > 100) {
             this.messages.shift();

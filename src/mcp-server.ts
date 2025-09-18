@@ -407,13 +407,13 @@ export class IstariMCPServer {
   private async gotoLine(documentId: number, line: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
     doc.ui.requestedLine = line;
-    doc.ui.jumpToRequestedLine('mcp');
+    const output = await doc.ui.jumpToRequestedLine('mcp');
 
     return {
       content: [
         {
           type: 'text',
-          text: `Navigated to line ${line} in document ${documentId}. Status: ${doc.ui.status}`,
+          text: output,
         },
       ],
     };
@@ -539,13 +539,13 @@ export class IstariMCPServer {
 
   private async nextLine(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    doc.ui.nextLine('mcp');
+    const output = await doc.ui.nextLine('mcp');
 
     return {
       content: [
         {
           type: 'text',
-          text: `Moved to next line in document ${documentId}. Current line: ${doc.ui.currentLine}`,
+          text: output,
         },
       ],
     };
@@ -553,13 +553,13 @@ export class IstariMCPServer {
 
   private async prevLine(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    doc.ui.prevLine('mcp');
+    const output = await doc.ui.prevLine('mcp');
 
     return {
       content: [
         {
           type: 'text',
-          text: `Moved to previous line in document ${documentId}. Current line: ${doc.ui.currentLine}`,
+          text: output,
         },
       ],
     };

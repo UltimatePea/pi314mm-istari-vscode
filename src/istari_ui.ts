@@ -198,15 +198,18 @@ export class IstariUI {
         // });
     }
 
-    sendLines(text: string, source: 'user' | 'mcp' = 'user') {
-        this.terminal.enqueueTask(new IstariTask(IstariInputCommand.textInput, text, (data) => {
-            this.webview.appendText(data, `${source}-jump-to-${this._requestedLine}`);
-            this.respondToSendLineResponse(data);
-            return true;
-        }));
+    sendLines(text: string, source: 'user' | 'mcp' = 'user'): Promise<string> {
+        return new Promise((resolve) => {
+            this.terminal.enqueueTask(new IstariTask(IstariInputCommand.textInput, text, (data) => {
+                this.webview.appendText(data, `${source}-jump-to-${this._requestedLine}`);
+                this.respondToSendLineResponse(data);
+                resolve(data);
+                return true;
+            }));
+        });
     }
 
-    rewindToLine(line: number, source: 'user' | 'mcp' = 'user') {
+    rewindToLine(line: number, source: 'user' | 'mcp' = 'user'): Promise<string> {
         // When rewinding, update the cache to reflect the new state
         if (line > 1) {
             // Keep only the lines that will remain checked after rewind
@@ -214,13 +217,16 @@ export class IstariUI {
         } else {
             this._checkedLinesCache = [];
         }
-        this.terminal.enqueueTask(new IstariTask(IstariInputCommand.rewind, line.toString(), (data) => {
-            this.webview.appendText(data, `${source}-rewind-to-${line}`);
-            return true;
-        }));
+        return new Promise((resolve) => {
+            this.terminal.enqueueTask(new IstariTask(IstariInputCommand.rewind, line.toString(), (data) => {
+                this.webview.appendText(data, `${source}-rewind-to-${line}`);
+                resolve(data);
+                return true;
+            }));
+        });
     }
 
-    jumpToRequestedLine(source: 'user' | 'mcp' = 'user') {
+    async jumpToRequestedLine(source: 'user' | 'mcp' = 'user'): Promise<string> {
         // Check if the cached content matches the current document
         if (this._checkedLinesCache.length > 0) {
             // Find the last line where content still matches
@@ -242,17 +248,17 @@ export class IstariUI {
 
             // Rewind if we're ahead of the last valid line
             if (validLine < this._currentLine) {
-                this.rewindToLine(validLine, source);
+                const result = await this.rewindToLine(validLine, source);
                 this._requestedLine = Math.max(validLine, this._requestedLine);
-                return;
+                return result;
             }
         }
 
         if (this._requestedLine > this._currentLine) {
             let text = this.istariEditor.getTextRange(this._currentLine - 1, this._requestedLine - 1);
-            this.sendLines(text, source);
+            return await this.sendLines(text, source);
         } else if (this._requestedLine < this._currentLine) {
-            this.rewindToLine(this._requestedLine, source);
+            return await this.rewindToLine(this._requestedLine, source);
         } else if (this._requestedLine === this._currentLine && vscode.workspace.getConfiguration().get<boolean>('istari.continueJumpingForward')?.valueOf()) {
             // special: if we already jumped to the requested line, just jump the next line past ;
             // currentLine and requestedLine is 1 indexed, nextline is zero-indexed
@@ -266,33 +272,38 @@ export class IstariUI {
             }
             if (nextline + 1 !== this._requestedLine) {
                 this._requestedLine = nextline + 1;
-                this.jumpToRequestedLine(source);
+                return await this.jumpToRequestedLine(source);
             }
         }
+
+        // Default case: already at the requested line, no action needed
+        return `Already at line ${this._requestedLine}`;
     }
 
     jumpToCursor() {
         let cursorLine = this.istariEditor.getCursorLine();
         this._requestedLine = cursorLine + 1;
-        this.jumpToRequestedLine('user');
+        this.jumpToRequestedLine('user'); // Fire and forget for user actions
     }
 
-    nextLine(source: 'user' | 'mcp' = 'user') {
+    async nextLine(source: 'user' | 'mcp' = 'user'): Promise<string> {
         console.log("nextLine not implemented");
         if (this._currentLine < this.istariEditor.lineCount) {
             let text = this.istariEditor.getTextRange(this._currentLine - 1, this._currentLine);
-            this.sendLines(text, source);
+            return await this.sendLines(text, source);
         } else {
             console.log("error");
+            return "Error: Already at the last line";
         }
     }
 
-    prevLine(source: 'user' | 'mcp' = 'user') {
+    async prevLine(source: 'user' | 'mcp' = 'user'): Promise<string> {
         console.log("prevLine not implemented");
         if (this._currentLine > 1) {
-            this.rewindToLine(this._currentLine - 1, source);
+            return await this.rewindToLine(this._currentLine - 1, source);
         } else {
             console.log("error");
+            return "Error: Already at the first line";
         }
     }
 

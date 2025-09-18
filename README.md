@@ -9,7 +9,7 @@ Most of the Emacs Istari commands are included in the extension. The keyboard sh
 ## Claude Code Integration
 
 To enable Claude Code integration via MCP:
-1. Open an `.ist` file (starts MCP server automatically)
+1. Open an `.ist` file (starts MCP server automatically on http://localhost:47821)
 2. Use the "Istari: Install Claude MCP" command from the VS Code Command Palette
 
-Note: The current implementation uses a simple HTTP endpoint. If you experience connection issues, you may need to configure Claude Code to use stdio transport instead of HTTP.
+The MCP server runs over HTTP and implements the MCP JSON-RPC protocol for tool communication.

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { dirname } from 'path';
 import { IstariTerminal, IstariTask, IstariInputCommand, IstariCommand } from './istari_terminal';
 import { IstariWebviewState } from './istari_webview_state';
 import { IstariEditor, IstariStatus } from './istari_editor';
@@ -61,14 +62,14 @@ export class IstariUI {
         this._status = "ready";
         this._checkedLinesCache = [];
 
-        this.terminal = new IstariTerminal(document,
+        this.terminal = new IstariTerminal(dirname(document.fileName),
             this.defaultCallback.bind(this),
             this.tasksUpdated.bind(this));
     }
 
     restartIstariTerminal() {
         this.terminal.proc.kill();
-        this.terminal = new IstariTerminal(this.document,
+        this.terminal = new IstariTerminal(dirname(this.document.fileName),
             this.defaultCallback.bind(this),
             this.tasksUpdated.bind(this));
         this.webview.resetText();
@@ -276,20 +277,20 @@ export class IstariUI {
         this.jumpToRequestedLine('user');
     }
 
-    nextLine() {
+    nextLine(source: 'user' | 'mcp' = 'user') {
         console.log("nextLine not implemented");
         if (this._currentLine < this.istariEditor.lineCount) {
             let text = this.istariEditor.getTextRange(this._currentLine - 1, this._currentLine);
-            this.sendLines(text, 'user');
+            this.sendLines(text, source);
         } else {
             console.log("error");
         }
     }
 
-    prevLine() {
+    prevLine(source: 'user' | 'mcp' = 'user') {
         console.log("prevLine not implemented");
         if (this._currentLine > 1) {
-            this.rewindToLine(this._currentLine - 1, 'user');
+            this.rewindToLine(this._currentLine - 1, source);
         } else {
             console.log("error");
         }

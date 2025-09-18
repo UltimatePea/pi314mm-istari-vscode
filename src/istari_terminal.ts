@@ -1,7 +1,6 @@
 
 import { ChildProcess, spawn } from 'child_process';
 import * as vscode from 'vscode';
-import { dirname } from 'path';
 import * as fs from 'fs';
 
 function bufferToCaretString(buffer: Buffer) {
@@ -55,15 +54,14 @@ export class IstariTerminal {
     pendingOutput: Buffer;
 
     constructor(
-        document: vscode.TextDocument,
+        workingDirectory: string,
         onDefaultCallback: (cmd: IstariCommand, data: string) => void,
         onTasksUpdated: () => void,
     ) {
         let sml = vscode.workspace.getConfiguration().get<string>('istari.smlLocation')!;
         let istari = vscode.workspace.getConfiguration().get<string>('istari.istariLocation')!;
-        let cwd = dirname(document.fileName);
         this.defaultCallback = onDefaultCallback;
-        this.proc = spawn(sml, ["@SMLload=" + istari], { cwd: cwd, shell: true });
+        this.proc = spawn(sml, ["@SMLload=" + istari], { cwd: workingDirectory, shell: true });
         if (!fs.existsSync(istari)) {
             throw new Error("Istari not found at " + istari);
         }

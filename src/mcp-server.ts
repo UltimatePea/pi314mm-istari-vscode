@@ -539,7 +539,7 @@ export class IstariMCPServer {
 
   private async nextLine(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    doc.ui.nextLine();
+    doc.ui.nextLine('mcp');
 
     return {
       content: [
@@ -553,7 +553,7 @@ export class IstariMCPServer {
 
   private async prevLine(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    doc.ui.prevLine();
+    doc.ui.prevLine('mcp');
 
     return {
       content: [

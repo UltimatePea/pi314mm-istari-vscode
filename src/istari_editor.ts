@@ -52,41 +52,109 @@ const decorationBlueGutter = vscode.window.createTextEditorDecorationType({
 export type IstariStatus = "ready" | "working" | "partialReady";
 
 /**
- * IstariEditor is a stateless class that manages visual decorations for an editor.
- * All state is passed in from IstariUI, allowing the editor to be swapped without losing state.
+ * IstariEditor manages visual decorations for multiple editors of the same document.
+ * It maintains a list of editors and fetches the document fresh from the URI when needed.
+ * When editors are closed, they are automatically removed from the list.
  */
 export class IstariEditor {
-    editor: vscode.TextEditor;
+    private editors: Set<vscode.TextEditor>;
+    private editorCloseListeners: Map<vscode.TextEditor, vscode.Disposable>;
+    private uri: string | undefined;
 
-    constructor(editor: vscode.TextEditor) {
-        this.editor = editor;
+    constructor() {
+        this.editors = new Set();
+        this.editorCloseListeners = new Map();
     }
 
-    get document(): vscode.TextDocument {
-        return this.editor.document;
+
+    get editor(): vscode.TextEditor {
+        // Return the first available editor, or throw if none exist
+        const firstEditor = this.editors.values().next().value;
+        if (!firstEditor) {
+            throw new Error('No editors available');
+        }
+        return firstEditor;
+    }
+
+    addEditor(editor: vscode.TextEditor): void {
+        const editorUri = editor.document.uri.toString();
+
+        // Set URI from first editor
+        if (!this.uri) {
+            this.uri = editorUri;
+        } else if (editorUri !== this.uri) {
+            throw new Error(`Editor document URI ${editorUri} does not match expected URI ${this.uri}`);
+        }
+
+        // Add editor to set
+        this.editors.add(editor);
+
+        // Listen for when this editor is closed
+        const listener = vscode.window.onDidChangeVisibleTextEditors(() => {
+            // Check if this editor is still in the visible editors list
+            if (!vscode.window.visibleTextEditors.includes(editor)) {
+                // Editor was closed, remove it
+                this.removeEditor(editor);
+            }
+        });
+
+        this.editorCloseListeners.set(editor, listener);
+    }
+
+    private removeEditor(editor: vscode.TextEditor): void {
+        // Clear decorations from this specific editor before removing
+        this.clearDecorationsForEditor(editor);
+
+        // Remove editor from set
+        this.editors.delete(editor);
+
+        // Dispose and remove the listener
+        const listener = this.editorCloseListeners.get(editor);
+        if (listener) {
+            listener.dispose();
+            this.editorCloseListeners.delete(editor);
+        }
     }
 
     setEditor(editor: vscode.TextEditor): void {
-        this.editor = editor;
+        // Add the editor if it's not already tracked
+        if (!this.editors.has(editor)) {
+            this.addEditor(editor);
+        }
+    }
+
+    hasEditors(): boolean {
+        return this.editors.size > 0;
+    }
+
+    getEditorCount(): number {
+        return this.editors.size;
     }
 
     updateDecorations(currentLine: number, requestedLine: number, status: IstariStatus): void {
+        // Apply decorations to all editors
+        for (const editor of this.editors) {
+            this.updateDecorationsForEditor(editor, currentLine, requestedLine, status);
+        }
+    }
+
+    private updateDecorationsForEditor(editor: vscode.TextEditor, currentLine: number, requestedLine: number, status: IstariStatus): void {
         // blue dot on current line
         let range = currentLine > 1 ? [
             new vscode.Range(new vscode.Position(currentLine - 1, 0), new vscode.Position(currentLine - 1, 0))
         ] : [];
         let colorCurrentLine = vscode.workspace.getConfiguration().get<boolean>('istari.colorCurrentLine');
         if (colorCurrentLine && colorCurrentLine.valueOf()) {
-            this.editor.setDecorations(decorationBlueBackground, range);
+            editor.setDecorations(decorationBlueBackground, range);
         }
         let colorGutter = vscode.workspace.getConfiguration().get<boolean>('istari.colorGutter');
         if (colorGutter && colorGutter.valueOf()) {
             if (status === "working") {
-                this.editor.setDecorations(decorationBlueHourglassGutter, range);
-                this.editor.setDecorations(decorationBlueArrowGutter, []);
+                editor.setDecorations(decorationBlueHourglassGutter, range);
+                editor.setDecorations(decorationBlueArrowGutter, []);
             } else {
-                this.editor.setDecorations(decorationBlueHourglassGutter, []);
-                this.editor.setDecorations(decorationBlueArrowGutter, range);
+                editor.setDecorations(decorationBlueHourglassGutter, []);
+                editor.setDecorations(decorationBlueArrowGutter, range);
             }
         }
         // all previous line green
@@ -94,11 +162,11 @@ export class IstariEditor {
             new vscode.Range(new vscode.Position(0, 0), new vscode.Position(currentLine - 2, 0))
         ] : [];
         if (colorGutter && colorGutter.valueOf()) {
-            this.editor.setDecorations(decorationGreenGutter, greenRange);
+            editor.setDecorations(decorationGreenGutter, greenRange);
         }
         let colorCompleted = vscode.workspace.getConfiguration().get<boolean>('istari.colorCompleted');
         if (colorCompleted && colorCompleted.valueOf()) {
-            this.editor.setDecorations(decorationGreenBackground, greenRange);
+            editor.setDecorations(decorationGreenBackground, greenRange);
         }
         if (colorGutter && colorGutter.valueOf()) {
             // current line - requested line, based on status
@@ -111,25 +179,25 @@ export class IstariEditor {
             ] : [];
             switch (status) {
                 case "ready": {
-                    this.editor.setDecorations(decorationRedGutter, range2);
-                    this.editor.setDecorations(decorationBlueGutter, []);
-                    this.editor.setDecorations(decorationYellowGutter, []);
+                    editor.setDecorations(decorationRedGutter, range2);
+                    editor.setDecorations(decorationBlueGutter, []);
+                    editor.setDecorations(decorationYellowGutter, []);
                     break;
                 }
                 case "partialReady": {
-                    this.editor.setDecorations(decorationRedGutter, []);
+                    editor.setDecorations(decorationRedGutter, []);
                     // force adding range on partial ready status
                     if (range2.length === 0) {
                         range2 = [new vscode.Range(new vscode.Position(currentLine, 0), new vscode.Position(currentLine, 0))];
                     }
-                    this.editor.setDecorations(decorationBlueGutter, range2);
-                    this.editor.setDecorations(decorationYellowGutter, []);
+                    editor.setDecorations(decorationBlueGutter, range2);
+                    editor.setDecorations(decorationYellowGutter, []);
                     break;
                 }
                 case "working": {
-                    this.editor.setDecorations(decorationRedGutter, []);
-                    this.editor.setDecorations(decorationBlueGutter, []);
-                    this.editor.setDecorations(decorationYellowGutter, range2);
+                    editor.setDecorations(decorationRedGutter, []);
+                    editor.setDecorations(decorationBlueGutter, []);
+                    editor.setDecorations(decorationYellowGutter, range2);
                     break;
                 }
             }
@@ -137,30 +205,37 @@ export class IstariEditor {
     }
 
     clearDecorations(): void {
-        this.editor.setDecorations(decorationBlueArrowGutter, []);
-        this.editor.setDecorations(decorationBlueHourglassGutter, []);
-        this.editor.setDecorations(decorationBlueBackground, []);
-        this.editor.setDecorations(decorationGreenGutter, []);
-        this.editor.setDecorations(decorationGreenBackground, []);
-        this.editor.setDecorations(decorationYellowGutter, []);
-        this.editor.setDecorations(decorationRedGutter, []);
-        this.editor.setDecorations(decorationBlueGutter, []);
+        // Clear decorations from all editors
+        for (const editor of this.editors) {
+            this.clearDecorationsForEditor(editor);
+        }
+    }
+
+    private clearDecorationsForEditor(editor: vscode.TextEditor): void {
+        editor.setDecorations(decorationBlueArrowGutter, []);
+        editor.setDecorations(decorationBlueHourglassGutter, []);
+        editor.setDecorations(decorationBlueBackground, []);
+        editor.setDecorations(decorationGreenGutter, []);
+        editor.setDecorations(decorationGreenBackground, []);
+        editor.setDecorations(decorationYellowGutter, []);
+        editor.setDecorations(decorationRedGutter, []);
+        editor.setDecorations(decorationBlueGutter, []);
     }
 
     getCursorLine(): number {
         return this.editor.selection.active.line;
     }
 
-    getTextRange(startLine: number, endLine: number): string {
+    getTextRange(document: vscode.TextDocument, startLine: number, endLine: number): string {
         let range = new vscode.Range(new vscode.Position(startLine, 0), new vscode.Position(endLine, 0));
-        return this.editor.document.getText(range);
+        return document.getText(range);
     }
 
-    getLineAt(line: number): vscode.TextLine {
-        return this.editor.document.lineAt(line);
+    getLineAt(document: vscode.TextDocument, line: number): vscode.TextLine {
+        return document.lineAt(line);
     }
 
-    get lineCount(): number {
-        return this.editor.document.lineCount;
+    getLineCount(document: vscode.TextDocument): number {
+        return document.lineCount;
     }
 }

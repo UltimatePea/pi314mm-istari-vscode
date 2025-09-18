@@ -5,7 +5,7 @@ import { IstariWebviewState } from './istari_webview_state';
 import { IstariEditor, IstariStatus } from './istari_editor';
 
 export class IstariUI {
-    document: vscode.TextDocument;
+    private uri: string; // Store URI instead of document
     terminal: IstariTerminal;
     webview: IstariWebviewState;
     istariEditor: IstariEditor;
@@ -17,7 +17,16 @@ export class IstariUI {
     private _status: IstariStatus;
     private _checkedLinesCache: string[]; // Cache of checked lines as array
 
-    // Getters for commonly accessed properties
+    // Single document access function to avoid code duplication
+    getDocument(): vscode.TextDocument {
+        // Always fetch document fresh from workspace
+        const document = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === this.uri);
+        if (!document) {
+            throw new Error(`Document not found for URI: ${this.uri}`);
+        }
+        return document;
+    }
+
     get editor(): vscode.TextEditor {
         return this.istariEditor.editor;
     }
@@ -39,20 +48,21 @@ export class IstariUI {
     }
 
     constructor(uri: string) {
-        // Find the document for this URI
+        this.uri = uri;
+
+        // Verify the document exists
         const document = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === uri);
         if (!document) {
             throw new Error(`Document not found for URI: ${uri}`);
         }
-        this.document = document;
 
+        this.istariEditor = new IstariEditor();
+
+        // Add the initial editor if one exists
         let editor = vscode.window.visibleTextEditors.find(x => x.document.uri.toString() === uri);
-        if (!editor) {
-            console.error("[c] Istari not found for the current active text file. Try save or reopen this file.", this.document.fileName);
-            vscode.window.showInformationMessage("[C] Istari not found for the current active text file. Try save or reopen this file.");
-            throw new Error("[e] Istari not found for the current active text file. Try save or reopen this file.");
+        if (editor) {
+            this.istariEditor.addEditor(editor);
         }
-        this.istariEditor = new IstariEditor(editor);
         this.webview = new IstariWebviewState(uri);
         this.diagnostics = vscode.languages.createDiagnosticCollection("istari");
 
@@ -62,14 +72,14 @@ export class IstariUI {
         this._status = "ready";
         this._checkedLinesCache = [];
 
-        this.terminal = new IstariTerminal(dirname(document.fileName),
+        this.terminal = new IstariTerminal(dirname(this.getDocument().fileName),
             this.defaultCallback.bind(this),
             this.tasksUpdated.bind(this));
     }
 
     restartIstariTerminal() {
         this.terminal.proc.kill();
-        this.terminal = new IstariTerminal(dirname(this.document.fileName),
+        this.terminal = new IstariTerminal(dirname(this.getDocument().fileName),
             this.defaultCallback.bind(this),
             this.tasksUpdated.bind(this));
         this.webview.resetText();
@@ -99,7 +109,7 @@ export class IstariUI {
         if (line > 1) {
             this._checkedLinesCache = [];
             for (let i = 0; i < line - 1; i++) {
-                this._checkedLinesCache.push(this.istariEditor.getLineAt(i).text);
+                this._checkedLinesCache.push(this.istariEditor.getLineAt(this.getDocument(), i).text);
             }
         } else {
             this._checkedLinesCache = [];
@@ -122,10 +132,10 @@ export class IstariUI {
             let line = parseInt(diagnostic[1]);
             let col = parseInt(diagnostic[2]);
             // get the range for single word (seems istari uses 1 based line number and 0 based col number)
-            let wordRange = this.istariEditor.document.getWordRangeAtPosition(new vscode.Position(line - 1, col))
+            let wordRange = this.getDocument().getWordRangeAtPosition(new vscode.Position(line - 1, col))
                 || new vscode.Range(new vscode.Position(line - 1, col), new vscode.Position(line - 1, col + 10));
             let diagnosticInfo = new vscode.Diagnostic(wordRange, text, vscode.DiagnosticSeverity.Error);
-            this.diagnostics.set(this.document.uri, [diagnosticInfo]);
+            this.diagnostics.set(this.getDocument().uri, [diagnosticInfo]);
         } else {
             this.diagnostics.clear();
         }
@@ -237,8 +247,8 @@ export class IstariUI {
 
             for (let i = 0; i < this._checkedLinesCache.length; i++) {
                 // Check if this line still exists and matches
-                if (i < this.istariEditor.lineCount) {
-                    let currentLineText = this.istariEditor.getLineAt(i).text;
+                if (i < this.istariEditor.getLineCount(this.getDocument())) {
+                    let currentLineText = this.istariEditor.getLineAt(this.getDocument(), i).text;
                     if (currentLineText === this._checkedLinesCache[i]) {
                         validLine = i + 2; // i is 0-indexed, validLine is 1-indexed and points to the next unchecked line
                     } else {
@@ -258,7 +268,7 @@ export class IstariUI {
         }
 
         if (this._requestedLine > this._currentLine) {
-            let text = this.istariEditor.getTextRange(this._currentLine - 1, this._requestedLine - 1);
+            let text = this.istariEditor.getTextRange(this.getDocument(), this._currentLine - 1, this._requestedLine - 1);
             return await this.sendLines(text, source);
         } else if (this._requestedLine < this._currentLine) {
             return await this.rewindToLine(this._requestedLine, source);
@@ -266,8 +276,8 @@ export class IstariUI {
             // special: if we already jumped to the requested line, just jump the next line past ;
             // currentLine and requestedLine is 1 indexed, nextline is zero-indexed
             let nextline = this._currentLine;
-            while (nextline < this.istariEditor.lineCount) {
-                let line = this.istariEditor.getLineAt(nextline).text;
+            while (nextline < this.istariEditor.getLineCount(this.getDocument())) {
+                let line = this.istariEditor.getLineAt(this.getDocument(), nextline).text;
                 nextline++;
                 if (line.includes(";")) {
                     break;
@@ -291,8 +301,8 @@ export class IstariUI {
 
     async nextLine(source: 'user' | 'mcp' = 'user'): Promise<string> {
         console.log("nextLine not implemented");
-        if (this._currentLine < this.istariEditor.lineCount) {
-            let text = this.istariEditor.getTextRange(this._currentLine - 1, this._currentLine);
+        if (this._currentLine < this.istariEditor.getLineCount(this.getDocument())) {
+            let text = this.istariEditor.getTextRange(this.getDocument(), this._currentLine - 1, this._currentLine);
             return await this.sendLines(text, source);
         } else {
             console.log("error");

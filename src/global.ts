@@ -6,7 +6,7 @@ export interface IstariDocument {
     id: number;
     uri: string;  // Document URI as unique identifier
     ui: IstariUI;
-    document: vscode.TextDocument;
+    // Document is not stored - always fetch fresh from workspace by uri
 }
 
 // Track documents by URI
@@ -20,15 +20,10 @@ export function getOrCreateIstariUI(uri: string): IstariUI {
     // Check if UI already exists for this URI
     const existingDoc = istariDocuments.get(uri);
     if (existingDoc) {
-        // Refresh the TextDocument reference
-        const document = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === uri);
-        if (document) {
-            existingDoc.document = document;
-        }
         return existingDoc.ui;
     }
 
-    // Find the TextDocument for this URI
+    // Verify the TextDocument exists for this URI
     const document = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === uri);
     if (!document) {
         throw new Error(`Document not found for URI: ${uri}`);
@@ -41,8 +36,7 @@ export function getOrCreateIstariUI(uri: string): IstariUI {
     const istariDoc: IstariDocument = {
         id: nextDocumentId++,
         uri: uri,
-        ui: ui,
-        document: document
+        ui: ui
     };
 
     // Register document
@@ -82,8 +76,8 @@ export function getIstariByUri(uri: string): IstariUI | undefined {
 }
 
 export function getDocumentByUri(uri: string): vscode.TextDocument | undefined {
-    const istariDoc = istariDocuments.get(uri);
-    return istariDoc?.document;
+    // Always fetch document fresh from workspace
+    return vscode.workspace.textDocuments.find(doc => doc.uri.toString() === uri);
 }
 
 export function setMcpServer(server: IstariMCPServer | undefined) {

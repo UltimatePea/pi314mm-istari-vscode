@@ -20,7 +20,7 @@ export async function prevLine(istari: IstariUI): Promise<string> {
 }
 
 export async function jumpToCursor(istari: IstariUI): Promise<string> {
-    let cursorLine = istari.editor.selection.active.line;
+    let cursorLine = istari.istariEditor.getCursorLine();
     istari.requestedLine = cursorLine + 1;
     return await istari.jumpToRequestedLine('user');
 }
@@ -93,24 +93,26 @@ export function interrupt(istari: IstariUI): string {
 
 export function jumpCursor(istari: IstariUI): string {
     let pos = new vscode.Position(istari.currentLine - 1, 0);
-    istari.editor.selection = new vscode.Selection(pos, pos);
-    istari.editor.revealRange(new vscode.Range(pos, pos));
+    const editor = istari.istariEditor.editor;
+    editor.selection = new vscode.Selection(pos, pos);
+    editor.revealRange(new vscode.Range(pos, pos));
     return `Cursor jumped to line ${istari.currentLine}`;
 }
 
 export function getDocumentStatus(istari: IstariUI): any {
+    const doc = istari.getDocument();
     return {
-        fileName: istari.document.fileName,
+        fileName: doc.fileName,
         status: istari.status,
         currentLine: istari.currentLine,
         requestedLine: istari.requestedLine,
-        totalLines: istari.document.lineCount,
+        totalLines: doc.lineCount,
         taskQueueLength: istari.terminal.tasks.length,
     };
 }
 
 export function getDiagnostics(istari: IstariUI): any {
-    const diagnostics = vscode.languages.getDiagnostics(istari.document.uri);
+    const diagnostics = vscode.languages.getDiagnostics(istari.getDocument().uri);
     return {
         diagnostics: diagnostics.map(d => ({
             severity: vscode.DiagnosticSeverity[d.severity],

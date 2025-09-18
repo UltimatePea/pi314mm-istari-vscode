@@ -549,14 +549,16 @@ export class IstariMCPServer {
 
   private async listDocuments(): Promise<any> {
     const documents = Array.from(istariDocuments.entries()).map(([uri, doc]) => {
+      // Get document fresh from workspace
+      const document = vscode.workspace.textDocuments.find(d => d.uri.toString() === uri);
       return {
         id: doc.id,
         uri: uri,
-        filename: doc.document.fileName,
-        basename: doc.document.fileName.split(/[/\\]/).pop() || doc.document.fileName,
+        filename: document?.fileName || 'Unknown',
+        basename: document?.fileName.split(/[/\\]/).pop() || document?.fileName || 'Unknown',
         status: doc.ui.status,
         currentLine: doc.ui.currentLine,
-        totalLines: doc.document.lineCount
+        totalLines: document?.lineCount || 0
       };
     });
 

@@ -76,20 +76,6 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'get_current_output',
-          description: 'Get the current output from the Istari proof assistant',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              document_id: {
-                type: 'number',
-                description: 'The document ID to operate on',
-              },
-            },
-            required: ['document_id'],
-          },
-        },
-        {
           name: 'show_details',
           description: 'Show current proof state details (equivalent to Prover.detail())',
           inputSchema: {
@@ -105,7 +91,7 @@ export class IstariMCPServer {
         },
         {
           name: 'list_constants',
-          description: 'List all available constants in the current context',
+          description: 'List all available constants in a specific module',
           inputSchema: {
             type: 'object',
             properties: {
@@ -115,10 +101,10 @@ export class IstariMCPServer {
               },
               module: {
                 type: 'string',
-                description: 'Optional module name to filter constants',
+                description: 'Module name to list constants from',
               },
             },
-            required: ['document_id'],
+            required: ['document_id', 'module'],
           },
         },
         {
@@ -294,14 +280,11 @@ export class IstariMCPServer {
           case 'goto_line':
             return await this.gotoLine((args as any).document_id, (args as any).line);
 
-          case 'get_current_output':
-            return await this.getCurrentOutput((args as any).document_id);
-
           case 'show_details':
             return await this.showDetails((args as any).document_id);
 
           case 'list_constants':
-            return await this.listConstants((args as any).document_id, (args as any)?.module);
+            return await this.listConstants((args as any).document_id, (args as any).module);
 
           case 'get_type':
             return await this.getType((args as any).document_id, (args as any).constant);
@@ -414,23 +397,6 @@ export class IstariMCPServer {
     };
   }
 
-  private async getCurrentOutput(documentId: number): Promise<any> {
-    const doc = this.getDocumentById(documentId);
-    const output = IstariHelper.getCurrentOutput(doc.ui);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            documentId: documentId,
-            ...output
-          }, null, 2),
-        },
-      ],
-    };
-  }
-
   private async showDetails(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
     const result = await IstariHelper.showDetails(doc.ui);
@@ -444,9 +410,9 @@ export class IstariMCPServer {
     };
   }
 
-  private async listConstants(documentId: number, module?: string): Promise<any> {
+  private async listConstants(documentId: number, module: string): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    const result = await IstariHelper.listConstantsAdvanced(doc.ui, module);
+    const result = await IstariHelper.listConstantsModule(doc.ui, module);
     return {
       content: [
         {

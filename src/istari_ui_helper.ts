@@ -61,13 +61,6 @@ export async function getCurrentGoals(istari: IstariUI, verbose: boolean): Promi
     }
 }
 
-export async function listConstantsAdvanced(istari: IstariUI, module?: string): Promise<string> {
-    const code = module
-        ? `Report.listConstants (Symbol.fromValue "${module}");`
-        : "Report.listConstants (Symbol.fromValue \"Main\");";
-    return await istari.interject(code);
-}
-
 export async function showDetails(istari: IstariUI): Promise<string> {
     return await istari.interject("Prover.detail ();");
 }

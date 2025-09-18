@@ -99,17 +99,6 @@ export function jumpCursor(istari: IstariUI): string {
     return `Cursor jumped to line ${istari.currentLine}`;
 }
 
-export function getDocumentStatus(istari: IstariUI): any {
-    const doc = istari.getDocument();
-    return {
-        fileName: doc.fileName,
-        status: istari.status,
-        currentLine: istari.currentLine,
-        requestedLine: istari.requestedLine,
-        totalLines: doc.lineCount,
-        taskQueueLength: istari.terminal.tasks.length,
-    };
-}
 
 export function getDiagnostics(istari: IstariUI): any {
     const diagnostics = vscode.languages.getDiagnostics(istari.getDocument().uri);
@@ -173,11 +162,10 @@ export async function attemptTactic(istari: IstariUI, tactic: string): Promise<{
             // Check if the line actually moved (success condition)
             if (istari.currentLine > initialCurrentLine) {
                 // Success: tactic worked, line moved, keep the change
-                const proofState = getDocumentStatus(istari);
                 return {
                     success: true,
                     fileChanged: true,
-                    proofState: proofState
+                    proofState: result
                 };
             } else {
                 // Line didn't move, so tactic failed - rollback

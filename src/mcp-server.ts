@@ -162,20 +162,6 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'get_document_status',
-          description: 'Get the current status of an Istari document',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              document_id: {
-                type: 'number',
-                description: 'The document ID to operate on',
-              },
-            },
-            required: ['document_id'],
-          },
-        },
-        {
           name: 'restart_mcp_server',
           description: 'Restart the MCP server (kills current server and starts a new one)',
           inputSchema: {
@@ -234,8 +220,6 @@ export class IstariMCPServer {
           case 'search_constants':
             return await this.searchConstants((args as any).document_id, (args as any).target);
 
-          case 'get_document_status':
-            return await this.getDocumentStatus((args as any).document_id);
 
           case 'restart_mcp_server':
             return await this.restartMcpServer();
@@ -392,23 +376,6 @@ export class IstariMCPServer {
     };
   }
 
-  private async getDocumentStatus(documentId: number): Promise<any> {
-    const doc = this.getDocumentById(documentId);
-    const status = IstariHelper.getDocumentStatus(doc.ui);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            id: doc.id,
-            uri: doc.uri,
-            ...status
-          }, null, 2),
-        },
-      ],
-    };
-  }
 
   private async listDocuments(): Promise<any> {
     const documents = Array.from(istariDocuments.entries()).map(([uri, doc]) => {

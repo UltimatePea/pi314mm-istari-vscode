@@ -8,6 +8,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import * as vscode from 'vscode';
 import { IstariDocument, getIstariDocumentByUri, istariDocuments, getOrCreateIstariUI } from './global';
+import * as IstariHelper from './istari_ui_helper';
 
 export class IstariMCPServer {
   private server: Server;
@@ -89,19 +90,14 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'get_current_goals',
-          description: 'Get the current proof goals',
+          name: 'show_details',
+          description: 'Show current proof state details (equivalent to Prover.detail())',
           inputSchema: {
             type: 'object',
             properties: {
               document_id: {
                 type: 'number',
                 description: 'The document ID to operate on',
-              },
-              verbose: {
-                type: 'boolean',
-                description: 'Whether to show verbose output with full types',
-                default: false,
               },
             },
             required: ['document_id'],
@@ -301,8 +297,8 @@ export class IstariMCPServer {
           case 'get_current_output':
             return await this.getCurrentOutput((args as any).document_id);
 
-          case 'get_current_goals':
-            return await this.getCurrentGoals((args as any).document_id, (args as any)?.verbose || false);
+          case 'show_details':
+            return await this.showDetails((args as any).document_id);
 
           case 'list_constants':
             return await this.listConstants((args as any).document_id, (args as any)?.module);
@@ -406,8 +402,7 @@ export class IstariMCPServer {
 
   private async gotoLine(documentId: number, line: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    doc.ui.requestedLine = line;
-    const output = await doc.ui.jumpToRequestedLine('mcp');
+    const output = await IstariHelper.gotoLine(doc.ui, line);
 
     return {
       content: [
@@ -421,8 +416,7 @@ export class IstariMCPServer {
 
   private async getCurrentOutput(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    const messages = doc.ui.webview?.messageHistory || [];
-    const latestMessage = messages[messages.length - 1] || {};
+    const output = IstariHelper.getCurrentOutput(doc.ui);
 
     return {
       content: [
@@ -430,116 +424,84 @@ export class IstariMCPServer {
           type: 'text',
           text: JSON.stringify({
             documentId: documentId,
-            status: doc.ui.status,
-            currentLine: doc.ui.currentLine,
-            requestedLine: doc.ui.requestedLine,
-            output: latestMessage.text || 'No output available',
-            taskQueueLength: doc.ui.terminal.tasks.length,
+            ...output
           }, null, 2),
         },
       ],
     };
   }
 
-  private async getCurrentGoals(documentId: number, verbose: boolean): Promise<any> {
+  private async showDetails(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    return new Promise((resolve) => {
-      const callback = (data: string) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: data,
-            },
-          ],
-        });
-        return true;
-      };
-
-      if (verbose) {
-        doc.ui.interjectWithCallback("Goals.printCurrent printLongGoal;", callback);
-      } else {
-        doc.ui.interjectWithCallback("Goals.printCurrent printGoal;", callback);
-      }
-    });
+    const result = await IstariHelper.showDetails(doc.ui);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: result,
+        },
+      ],
+    };
   }
 
   private async listConstants(documentId: number, module?: string): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    return new Promise((resolve) => {
-      const code = module
-        ? `Report.listConstants (Symbol.fromValue "${module}");`
-        : "Report.listConstants (Symbol.fromValue \"Main\");";
-
-      doc.ui.interjectWithCallback(code, (data: string) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: data,
-            },
-          ],
-        });
-        return true;
-      });
-    });
+    const result = await IstariHelper.listConstantsAdvanced(doc.ui, module);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: result,
+        },
+      ],
+    };
   }
 
   private async getType(documentId: number, constant: string): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    return new Promise((resolve) => {
-      doc.ui.getTypeForConstant(constant, (type: string) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: type,
-            },
-          ],
-        });
-      });
-    });
+    const output = await IstariHelper.getType(doc.ui, constant);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: output,
+        },
+      ],
+    };
   }
 
   private async getDefinition(documentId: number, constant: string): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    return new Promise((resolve) => {
-      doc.ui.getTypeAndDefinitionForConstant(constant, (data: string) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: data,
-            },
-          ],
-        });
-      });
-    });
+    const output = await IstariHelper.getDefinition(doc.ui, constant);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: output,
+        },
+      ],
+    };
   }
 
   private async searchConstants(documentId: number, target: string): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    return new Promise((resolve) => {
-      doc.ui.interjectWithCallback(
-        `Report.search (parseConstants /${target}/) [];`,
-        (data: string) => {
-          resolve({
-            content: [
-              {
-                type: 'text',
-                text: data,
-              },
-            ],
-          });
-          return true;
-        }
-      );
-    });
+    const output = await IstariHelper.searchConstants(doc.ui, target);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: output,
+        },
+      ],
+    };
   }
 
   private async nextLine(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    const output = await doc.ui.nextLine('mcp');
+    const output = await IstariHelper.nextLine(doc.ui);
 
     return {
       content: [
@@ -553,7 +515,7 @@ export class IstariMCPServer {
 
   private async prevLine(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    const output = await doc.ui.prevLine('mcp');
+    const output = await IstariHelper.prevLine(doc.ui);
 
     return {
       content: [
@@ -567,36 +529,30 @@ export class IstariMCPServer {
 
   private async interject(documentId: number, code: string): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    return new Promise((resolve) => {
-      doc.ui.interjectWithCallback(code, (output: string) => {
-        resolve({
-          content: [
-            {
-              type: 'text',
-              text: output,
-            },
-          ],
-        });
-        return true;
-      });
-    });
+    const output = await IstariHelper.interject(doc.ui, code);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: output,
+        },
+      ],
+    };
   }
 
   private async getDocumentStatus(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
+    const status = IstariHelper.getDocumentStatus(doc.ui);
+
     return {
       content: [
         {
           type: 'text',
           text: JSON.stringify({
             id: doc.id,
-            fileName: doc.document.fileName,
             uri: doc.uri,
-            status: doc.ui.status,
-            currentLine: doc.ui.currentLine,
-            requestedLine: doc.ui.requestedLine,
-            totalLines: doc.document.lineCount,
-            taskQueueLength: doc.ui.terminal.tasks.length,
+            ...status
           }, null, 2),
         },
       ],
@@ -605,27 +561,16 @@ export class IstariMCPServer {
 
   private async getDiagnostics(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    const diagnostics = vscode.languages.getDiagnostics(doc.document.uri);
+    const diagnostics = IstariHelper.getDiagnostics(doc.ui);
 
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(
-            {
-              documentId: documentId,
-              diagnostics: diagnostics.map(d => ({
-                severity: vscode.DiagnosticSeverity[d.severity],
-                message: d.message,
-                range: {
-                  start: { line: d.range.start.line + 1, character: d.range.start.character },
-                  end: { line: d.range.end.line + 1, character: d.range.end.character },
-                },
-              }))
-            },
-            null,
-            2
-          ),
+          text: JSON.stringify({
+            documentId: documentId,
+            ...diagnostics
+          }, null, 2),
         },
       ],
     };
@@ -633,13 +578,13 @@ export class IstariMCPServer {
 
   private async restartTerminal(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    doc.ui.restartIstariTerminal();
+    const output = IstariHelper.restartTerminal(doc.ui);
 
     return {
       content: [
         {
           type: 'text',
-          text: `Istari terminal restarted for document ${documentId}`,
+          text: output,
         },
       ],
     };
@@ -647,13 +592,13 @@ export class IstariMCPServer {
 
   private async interrupt(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    doc.ui.terminal.interrupt();
+    const output = IstariHelper.interrupt(doc.ui);
 
     return {
       content: [
         {
           type: 'text',
-          text: `Istari execution interrupted for document ${documentId}`,
+          text: output,
         },
       ],
     };

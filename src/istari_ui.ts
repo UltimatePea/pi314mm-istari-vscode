@@ -167,13 +167,16 @@ export class IstariUI {
         }
     }
 
-    interject(text: string) {
+    async interject(text: string): Promise<string> {
         // console.log("Interjecting: ", text);
         // this.write_stdin('\x02' + text + '\n');
-        this.terminal.enqueueTask(new IstariTask(IstariInputCommand.interject, text, (data) => {
-            this.webview.appendText(data, 'interject');
-            return true;
-        }));
+        return new Promise((resolve) => {
+            this.terminal.enqueueTask(new IstariTask(IstariInputCommand.interject, text, (data) => {
+                this.webview.appendText(data, 'interject');
+                resolve(data);
+                return true;
+            }));
+        });
     }
 
     interjectWithCallback(text: string, callback: (data: string) => boolean) {

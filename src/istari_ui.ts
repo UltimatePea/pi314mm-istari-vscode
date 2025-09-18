@@ -297,20 +297,18 @@ export class IstariUI {
 
 
     edit(e: vscode.TextDocumentChangeEvent) {
-        if (e.document === this.istariEditor.document) {
-            if (e.contentChanges.length > 0) {
-                if (e.contentChanges[0].range.end.line < this._currentLine - 1) {
-                    // skip if just inserting a trailing newline (possibly followed by spaces) right before this line
-                    if (e.contentChanges[0].text.includes("\n")
-                        && e.contentChanges[0].text.trim() === ""
-                        && e.contentChanges[0].range.end.line === this._currentLine - 2
-                        // ensures line after insertion is empty to prevent insertion in the middle
-                        && e.document.lineAt(e.contentChanges[0].range.end.line + 1).text.trim() === ""
-                    ) {
-                        return;
-                    }
-                    this.rewindToLine(e.contentChanges[0].range.start.line + 1);
+        if (e.contentChanges.length > 0) {
+            if (e.contentChanges[0].range.end.line < this._currentLine - 1) {
+                // skip if just inserting a trailing newline (possibly followed by spaces) right before this line
+                if (e.contentChanges[0].text.includes("\n")
+                    && e.contentChanges[0].text.trim() === ""
+                    && e.contentChanges[0].range.end.line === this._currentLine - 2
+                    // ensures line after insertion is empty to prevent insertion in the middle
+                    && e.document.lineAt(e.contentChanges[0].range.end.line + 1).text.trim() === ""
+                ) {
+                    return;
                 }
+                this.rewindToLine(e.contentChanges[0].range.start.line + 1);
             }
         }
     }

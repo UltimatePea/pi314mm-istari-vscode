@@ -50,7 +50,7 @@ export function getOrCreateIstariUI(uri: string): IstariUI {
 
     // Update MCP server if it exists
     if (mcpServer) {
-        mcpServer.updateDocument(istariDoc);
+        mcpServer.updateDocument();
     }
 
     return ui;

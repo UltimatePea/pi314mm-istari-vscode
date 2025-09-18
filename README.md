@@ -13,3 +13,9 @@ To enable Claude Code integration via MCP:
 2. Use the "Istari: Install Claude MCP" command from the VS Code Command Palette
 
 The MCP server runs over HTTP and implements the MCP JSON-RPC protocol for tool communication.
+
+To use with Codex / commandline mcp, use the following:
+```
+npx mcp-remote http://localhost:47821/mcp --allow-http  --transport http-only
+```
+

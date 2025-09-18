@@ -1,5 +1,4 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import * as http from 'http';
 import {
   CallToolRequestSchema,
@@ -14,11 +13,9 @@ export class IstariMCPServer {
   private server: Server;
   private httpServer?: http.Server;
   private port: number;
-  private isHttpMode: boolean;
 
-  constructor(port: number = 47821, useHttp: boolean = false) {
+  constructor(port: number = 47821) {
     this.port = port;
-    this.isHttpMode = useHttp;
     this.server = new Server(
       {
         name: 'istari-vscode',
@@ -689,20 +686,130 @@ export class IstariMCPServer {
   }
 
   async start() {
-    if (this.isHttpMode) {
-      this.httpServer = http.createServer((_req, res) => {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'MCP server is running' }));
+    await this.startHttpServer();
+  }
+
+  private async startHttpServer() {
+    this.httpServer = http.createServer(async (req, res) => {
+      // Enable CORS for browser clients
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+
+      if (req.method === 'POST' && req.url === '/mcp') {
+        let body = '';
+        req.on('data', chunk => {
+          body += chunk.toString();
+        });
+
+        req.on('end', async () => {
+          try {
+            const mcpRequest = JSON.parse(body);
+            const response = await this.handleMcpRequest(mcpRequest);
+
+            res.setHeader('Content-Type', 'application/json');
+            res.writeHead(200);
+            res.end(JSON.stringify(response));
+          } catch (error) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: 'Invalid request' }));
+          }
+        });
+      } else {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+    });
+
+    return new Promise<void>((resolve, reject) => {
+      this.httpServer!.listen(this.port, 'localhost', () => {
+        console.log(`Istari MCP HTTP server started on http://localhost:${this.port}`);
+        resolve();
       });
 
-      this.httpServer.listen(this.port, () => {
-        console.log(`Istari MCP HTTP server listening on port ${this.port}`);
+      this.httpServer!.on('error', (error) => {
+        reject(error);
       });
-    } else {
-      const transport = new StdioServerTransport();
-      await this.server.connect(transport);
-      console.log('Istari MCP server started on stdio');
+    });
+  }
+
+  private async handleMcpRequest(request: any): Promise<any> {
+    // Handle MCP JSON-RPC 2.0 protocol requests
+    try {
+      let result;
+      switch (request.method) {
+        case 'tools/list':
+          result = await this.handleListTools();
+          break;
+
+        case 'tools/call':
+          result = await this.handleCallTool(request.params);
+          break;
+
+        case 'initialize':
+          result = {
+            protocolVersion: '2024-11-05',
+            capabilities: {
+              tools: {}
+            },
+            serverInfo: {
+              name: 'istari-vscode',
+              version: '1.0.0'
+            }
+          };
+          break;
+
+        case 'notifications/initialized':
+          result = {};
+          break;
+
+        default:
+          throw new Error(`Unknown method: ${request.method}`);
+      }
+
+      // Return JSON-RPC 2.0 response format
+      return {
+        jsonrpc: '2.0',
+        id: request.id,
+        result: result
+      };
+    } catch (error) {
+      // Return JSON-RPC 2.0 error response
+      return {
+        jsonrpc: '2.0',
+        id: request.id,
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : 'Internal error'
+        }
+      };
     }
+  }
+
+  private async handleListTools(): Promise<any> {
+    // Use the existing server's handler
+    const handler = this.server as any;
+    const toolsResponse = await handler._requestHandlers.get('tools/list')({
+      method: 'tools/list',
+      params: {}
+    });
+    return toolsResponse;
+  }
+
+  private async handleCallTool(params: any): Promise<any> {
+    // Use the existing server's handler
+    const handler = this.server as any;
+    const callResponse = await handler._requestHandlers.get('tools/call')({
+      method: 'tools/call',
+      params: params
+    });
+    return callResponse;
   }
 
   async stop() {

@@ -134,6 +134,20 @@ export async function attemptTactic(istari: IstariUI, tactic: string): Promise<{
     error?: string;
 }> {
     try {
+        // Validate that the input is a proper tactic
+        const trimmedTactic = tactic.trim();
+        const isValidTactic = trimmedTactic.endsWith('.') ||
+                             trimmedTactic.endsWith(';') ||
+                             trimmedTactic === '{' ||
+                             trimmedTactic === '}';
+
+        if (!isValidTactic) {
+            return {
+                success: false,
+                fileChanged: false,
+                error: 'Invalid tactic format: must end with "." or ";" or be "{" or "}"'
+            };
+        }
         const document = istari.getDocument();
         const initialCurrentLine = istari.currentLine;
 

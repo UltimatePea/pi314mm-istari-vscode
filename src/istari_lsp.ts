@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getIstariForDocument, getIstari } from './global';
+import { getIstariByUri, getCurrentIstari } from './global';
 
 
 type DocSymbolType = 'define' | 'lemma' | 'typedef' | 'defineInd' | "";
@@ -163,9 +163,10 @@ export function startLSP() {
             let lastWord = getCurrentSubject(document, position);
             if (lastWord) {
                 let word: string = lastWord;
-                let istari = getIstariForDocument(document);
+                let istari = getIstariByUri(document.uri.toString());
+            if (!istari) return undefined;
                 return new Promise((resolve, reject) => {
-                    istari.getTypeForConstant(word,
+                    istari!.getTypeForConstant(word,
                         (data: string) => {
                             let signatureHelp = new vscode.SignatureHelp();
                             let signature = new vscode.SignatureInformation(
@@ -198,10 +199,11 @@ export function startLSP() {
             if (line.split("/").length > 2 && line.split("/").length % 2 !== 0) {
                 return undefined;
             }
-            let istari = getIstariForDocument(document);
+            let istari = getIstariByUri(document.uri.toString());
+            if (!istari) return undefined;
             let allWords = [...new Set(document.getText().match(/[A-Za-z0-9._]+/g))];
             return new Promise((resolve, reject) => {
-                istari.interjectWithCallback("Report.showAll ();",
+                istari!.interjectWithCallback("Report.showAll ();",
                     (data: string) => {
                         let istariWords = data.split("\n").filter((line) => !line.includes(" "));
                         let completions = istariWords.map((line: string) => {
@@ -217,7 +219,7 @@ export function startLSP() {
             });
         },
         resolveCompletionItem(item, token) {
-            let istari = getIstari();
+            let istari = getCurrentIstari();
             let itemName = item.label;
             return new Promise((resolve, reject) => {
                 istari?.getTypeAndDefinitionForConstant(itemName + "",
@@ -233,7 +235,8 @@ export function startLSP() {
     // Hover
     vscode.languages.registerHoverProvider('istari', {
         provideHover(document, position, token) {
-            let istari = getIstariForDocument(document);
+            let istari = getIstariByUri(document.uri.toString());
+            if (!istari) return undefined;
 
             // get the word at the position
             let word = document.getText(document.getWordRangeAtPosition(position, /[\w.]+/));
@@ -241,7 +244,7 @@ export function startLSP() {
                 return undefined;
             }
             return new Promise((resolve, reject) => {
-                istari.getTypeAndDefinitionForConstant(word,
+                istari!.getTypeAndDefinitionForConstant(word,
                     (typeAndDefinition: string) => {
                         resolve({
                             contents: [new vscode.MarkdownString().appendCodeblock(
@@ -258,7 +261,8 @@ export function startLSP() {
         async provideDocumentSymbols(document, token) {
             // find all lines that begins with define / or lemma ", 
             // and gete first word after / or " as the symbol name
-            let istari = getIstariForDocument(document);
+            let istari = getIstariByUri(document.uri.toString());
+            if (!istari) return undefined;
             let shouldShowTypeDetails = vscode.workspace.getConfiguration().get<boolean>('istari.showTypesInDocumentOutline')!;
             let docSymbols: DocSymbol[] = getDocumentSymbols(document);
             let moduleSymbols = getModuleSymbols(document);
@@ -280,7 +284,7 @@ export function startLSP() {
 
                 let symbolDesc: string = shouldShowTypeDetails ? await new Promise(
                     (resolve, reject) => {
-                        istari.getTypeForConstant(word, (type: string) => {
+                        istari!.getTypeForConstant(word, (type: string) => {
                             type = type.replace(/\s+/g, " ");
                             type = type.trim();
                             if (type.startsWith(word)) {
@@ -324,7 +328,8 @@ export function startLSP() {
     // goto definition
     vscode.languages.registerDefinitionProvider('istari', {
         provideDefinition(document, position, token) {
-            let istari = getIstariForDocument(document);
+            let istari = getIstariByUri(document.uri.toString());
+            if (!istari) return undefined;
             // get the word at the position
             let word = document.getText(document.getWordRangeAtPosition(position));
             if (!word) {

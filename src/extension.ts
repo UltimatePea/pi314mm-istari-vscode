@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import { IstariMCPServer } from './mcp-server';
 import { startLSP } from './istari_lsp';
-import { istariUIs, mcpServer, setMcpServer, getIstari, getOrCreateIstariUI } from './global';
+import { mcpServer, setMcpServer, getCurrentIstari, getOrCreateIstariUI, setCurrentIstariUri, getIstariByUri } from './global';
 
 
 
 function registerDoc(doc: vscode.TextDocument, editor: vscode.TextEditor | undefined = undefined) {
 	if (doc.languageId === "istari") {
 		// This will either get existing UI or create new one
-		const ui = getOrCreateIstariUI(doc);
+		const ui = getOrCreateIstariUI(doc.uri.toString());
 
 		// Update editor if provided
 		if (editor) {
@@ -52,6 +52,10 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.window.onDidChangeActiveTextEditor((editor) => {
 		if (editor) {
 			registerDoc(editor.document, editor);
+			// Update current Istari URI when switching editors
+			if (editor.document.languageId === "istari") {
+				setCurrentIstariUri(editor.document.uri.toString());
+			}
 		}
 	}
 	);
@@ -70,45 +74,46 @@ export function activate(context: vscode.ExtensionContext) {
 
 	vscode.workspace.onDidChangeTextDocument(e => {
 		if (e.document.languageId === "istari") {
-			let istari = getIstari();
+			const uri = e.document.uri.toString();
+			let istari = getIstariByUri(uri);
 			if (istari) {
 				istari.edit(e);
 			} else {
-				console.error("[C] Istari not found for the current active text file. Try save or reopen this file.", e.document.fileName, istariUIs);
+				console.error("[C] Istari not found for the document.", e.document.fileName);
 			}
 		}
 	});
 
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.jumpToCursor', () => {
-		let istari = getIstari();
+		let istari = getCurrentIstari();
 		istari?.editor.document.save();
 		istari?.jumpToCursor();
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.jumpToPreviouslyRequested', () => {
-		let istari = getIstari();
+		let istari = getCurrentIstari();
 		istari?.editor.document.save();
 		istari?.jumpToRequestedLine();
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.restartTerminal', () => {
-		let istari = getIstari();
+		let istari = getCurrentIstari();
 		istari?.restartIstariTerminal();
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.prevLine', () => {
-		getIstari()?.prevLine();
+		getCurrentIstari()?.prevLine();
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.nextLine', () => {
-		getIstari()?.nextLine();
+		getCurrentIstari()?.nextLine();
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.getType', () => {
 		vscode.window.showInputBox({ title: "Get the type of a constant", prompt: "constant", ignoreFocusOut: true }).then((expr) => {
 			if (expr) {
-				getIstari()?.interject("Report.showType (parseLongident /" + expr + "/);");
+				getCurrentIstari()?.interject("Report.showType (parseLongident /" + expr + "/);");
 			}
 		});
 	}));
@@ -116,7 +121,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('istari.getDefinition', () => {
 		vscode.window.showInputBox({ title: "Get the definition of a constant", prompt: "constant", ignoreFocusOut: true }).then((expr) => {
 			if (expr) {
-				getIstari()?.interject("Report.show (parseLongident /" + expr + "/);");
+				getCurrentIstari()?.interject("Report.show (parseLongident /" + expr + "/);");
 			}
 		});
 	}));
@@ -124,13 +129,13 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('istari.search', () => {
 		vscode.window.showInputBox({ title: "Find all constants that mention targets", prompt: "targets", ignoreFocusOut: true }).then((expr) => {
 			if (expr) {
-				getIstari()?.interject("Report.search (parseConstants /" + expr + "/) [];");
+				getCurrentIstari()?.interject("Report.search (parseConstants /" + expr + "/) [];");
 			}
 		});
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.interrupt', () => {
-		let istari = getIstari();
+		let istari = getCurrentIstari();
 		if (istari) {
 			istari.terminal.interrupt();
 		}
@@ -143,7 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// }));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.jumpCursor', () => {
-		let istari = getIstari();
+		let istari = getCurrentIstari();
 		if (istari) {
 			let pos = new vscode.Position(istari.currentLine - 1, 0);
 			istari.editor.selection = new vscode.Selection(pos, pos);
@@ -154,41 +159,41 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.commands.registerCommand('istari.interject', () => {
 		vscode.window.showInputBox({ title: "Interject with IML code", prompt: "IML code", ignoreFocusOut: true }).then((code) => {
 			if (code) {
-				getIstari()?.interject(code);
+				getCurrentIstari()?.interject(code);
 			}
 		});
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.showCurrentGoals', () => {
-		getIstari()?.interject("Prover.show ();");
+		getCurrentIstari()?.interject("Prover.show ();");
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.showCurrentGoalsVerbosely', () => {
-		getIstari()?.interject("Prover.showFull ();");
+		getCurrentIstari()?.interject("Prover.showFull ();");
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.details', () => {
-		getIstari()?.interject("Prover.detail ();");
+		getCurrentIstari()?.interject("Prover.detail ();");
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.listConstants', () => {
-		getIstari()?.interject("Report.showAll ();");
+		getCurrentIstari()?.interject("Report.showAll ();");
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.listConstantsModule', () => {
 		vscode.window.showInputBox({ title: "Module to list constants from", prompt: "module", ignoreFocusOut: true }).then((code) => {
 			if (code) {
-				getIstari()?.interject("Report.showModule (parseLongident /" + code + "/);");
+				getCurrentIstari()?.interject("Report.showModule (parseLongident /" + code + "/);");
 			}
 		});
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.showImplicitArguments', () => {
-		getIstari()?.interject("Show.showImplicits := not (!Show.showImplicits); if !Show.showImplicits then print \"Display of implicit arguments enabled.\\n\" else print \"Display of implicit arguments disabled.\\n\";");
+		getCurrentIstari()?.interject("Show.showImplicits := not (!Show.showImplicits); if !Show.showImplicits then print \"Display of implicit arguments enabled.\\n\" else print \"Display of implicit arguments disabled.\\n\";");
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.showSubstitutions', () => {
-		getIstari()?.interject("Show.showSubstitutions := not (!Show.showSubstitutions); if !Show.showSubstitutions then print \"Display of evar substitutions enabled.\\n\" else print \"Display of evar substitutions disabled.\\n\";");
+		getCurrentIstari()?.interject("Show.showSubstitutions := not (!Show.showSubstitutions); if !Show.showSubstitutions then print \"Display of evar substitutions enabled.\\n\" else print \"Display of evar substitutions disabled.\\n\";");
 	}));
 
 	// MCP Server
@@ -202,7 +207,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.showWebview', () => {
-		let istari = getIstari();
+		let istari = getCurrentIstari();
 		if (istari) {
 			istari.webview.showWebview();
 		} else {

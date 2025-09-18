@@ -8,7 +8,7 @@ import {
   McpError
 } from '@modelcontextprotocol/sdk/types.js';
 import * as vscode from 'vscode';
-import { IstariDocument, getActiveIstariDocument, getIstariDocumentByUri, istariDocuments } from './global';
+import { IstariDocument, getIstariDocumentByUri, istariDocuments } from './global';
 
 export class IstariMCPServer {
   private server: Server;
@@ -222,7 +222,7 @@ export class IstariMCPServer {
       // Get the active document
       const activeDoc = this.activeDocumentUri ?
         getIstariDocumentByUri(this.activeDocumentUri) :
-        getActiveIstariDocument();
+        undefined;
 
       if (!activeDoc) {
         throw new McpError(

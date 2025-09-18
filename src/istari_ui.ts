@@ -37,16 +37,22 @@ export class IstariUI {
         return this._status;
     }
 
-    constructor(document: vscode.TextDocument) {
+    constructor(uri: string) {
+        // Find the document for this URI
+        const document = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === uri);
+        if (!document) {
+            throw new Error(`Document not found for URI: ${uri}`);
+        }
         this.document = document;
-        let editor = vscode.window.visibleTextEditors.find(x => x.document === this.document);
+
+        let editor = vscode.window.visibleTextEditors.find(x => x.document.uri.toString() === uri);
         if (!editor) {
             console.error("[c] Istari not found for the current active text file. Try save or reopen this file.", this.document.fileName);
             vscode.window.showInformationMessage("[C] Istari not found for the current active text file. Try save or reopen this file.");
             throw new Error("[e] Istari not found for the current active text file. Try save or reopen this file.");
         }
         this.istariEditor = new IstariEditor(editor);
-        this.webview = new IstariWebviewState(document);
+        this.webview = new IstariWebviewState(uri);
         this.diagnostics = vscode.languages.createDiagnosticCollection("istari");
 
         // Initialize state

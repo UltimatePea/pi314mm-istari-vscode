@@ -9,28 +9,33 @@ export interface IstariDocument {
     document: vscode.TextDocument;
 }
 
-// Track documents by URI for reliable lookup
+// Track documents by URI
 export let istariDocuments: Map<string, IstariDocument> = new Map();
-// Also keep a Map for quick TextDocument lookup (for compatibility)
-export let istariUIs: Map<vscode.TextDocument, IstariUI> = new Map();
 export let mcpServer: IstariMCPServer | undefined;
+export let currentIstariUri: string | undefined;
 
 let nextDocumentId = 1;
 
-export function getOrCreateIstariUI(document: vscode.TextDocument): IstariUI {
-    const uri = document.uri.toString();
-
+export function getOrCreateIstariUI(uri: string): IstariUI {
     // Check if UI already exists for this URI
     const existingDoc = istariDocuments.get(uri);
     if (existingDoc) {
-        // Update the document reference in case it changed
-        existingDoc.document = document;
-        istariUIs.set(document, existingDoc.ui);
+        // Refresh the TextDocument reference
+        const document = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === uri);
+        if (document) {
+            existingDoc.document = document;
+        }
         return existingDoc.ui;
     }
 
+    // Find the TextDocument for this URI
+    const document = vscode.workspace.textDocuments.find(doc => doc.uri.toString() === uri);
+    if (!document) {
+        throw new Error(`Document not found for URI: ${uri}`);
+    }
+
     // Create new UI only if it doesn't exist
-    const ui = new IstariUI(document);
+    const ui = new IstariUI(uri);
 
     // Create document entry
     const istariDoc: IstariDocument = {
@@ -40,9 +45,8 @@ export function getOrCreateIstariUI(document: vscode.TextDocument): IstariUI {
         document: document
     };
 
-    // Register in both maps
+    // Register document
     istariDocuments.set(uri, istariDoc);
-    istariUIs.set(document, ui);
 
     // Update MCP server if it exists
     if (mcpServer) {
@@ -56,37 +60,30 @@ export function getIstariDocumentByUri(uri: string): IstariDocument | undefined 
     return istariDocuments.get(uri);
 }
 
-export function getActiveIstariDocument(): IstariDocument | undefined {
-    let editor = vscode.window.activeTextEditor;
-    if (editor && editor.document.languageId === "istari") {
-        return istariDocuments.get(editor.document.uri.toString());
+export function getCurrentIstari(): IstariUI | undefined {
+    if (currentIstariUri) {
+        return getIstariByUri(currentIstariUri);
     }
+    // No current Istari document selected
     return undefined;
+}
+
+export function setCurrentIstariUri(uri: string): void {
+    if (istariDocuments.has(uri)) {
+        currentIstariUri = uri;
+    }
+}
+
+export function getIstariByUri(uri: string): IstariUI | undefined {
+    const istariDoc = istariDocuments.get(uri);
+    return istariDoc?.ui;
+}
+
+export function getDocumentByUri(uri: string): vscode.TextDocument | undefined {
+    const istariDoc = istariDocuments.get(uri);
+    return istariDoc?.document;
 }
 
 export function setMcpServer(server: IstariMCPServer | undefined) {
     mcpServer = server;
-}
-
-// Legacy compatibility functions
-export function getIstari(): IstariUI | undefined {
-    let editor = vscode.window.activeTextEditor;
-    if (editor && editor.document.languageId === "istari") {
-        let istari = istariUIs.get(editor.document);
-        if (!istari) {
-            console.error("[f] Istari not found for the current active text file. Try save or reopen this file.", editor.document.fileName, istariUIs);
-            vscode.window.showInformationMessage("[B] Istari not found for the current active text file. Try save or reopen this file.");
-        }
-        return istari;
-    }
-    return undefined;
-}
-
-export function getIstariForDocument(doc: vscode.TextDocument): IstariUI {
-    let istari = istariUIs.get(doc);
-    if (!istari) {
-        console.error("[e] Istari not found for the current active text file. Try save or reopen this file.", doc.fileName, istariUIs);
-        throw new Error("[e] Istari not found for the current active text file. Try save or reopen this file.");
-    }
-    return istari;
 }

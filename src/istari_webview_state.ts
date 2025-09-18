@@ -4,21 +4,27 @@ import { IstariWebview } from './istari_webview';
 import { getIstariDocumentByUri } from './global';
 
 export class IstariWebviewState {
-    private document: vscode.TextDocument;
+    private uri: string;
     private webview: IstariWebview | null = null;
     private messages: any[] = [];
     private currentStatus: string = '';
     private currentTasks: string = '';
     private currentCursor: string = '';
 
-    constructor(document: vscode.TextDocument) {
-        this.document = document;
+    private get document(): vscode.TextDocument | undefined {
+        return vscode.workspace.textDocuments.find(doc => doc.uri.toString() === this.uri);
+    }
+
+    constructor(uri: string) {
+        this.uri = uri;
 
         // Show notification when state is created
-        const istariDoc = getIstariDocumentByUri(document.uri.toString());
+        const istariDoc = getIstariDocumentByUri(uri);
         const docIdStr = istariDoc?.id ? ` (ID: ${istariDoc.id})` : '';
+        const document = this.document;
+        const fileName = document ? path.basename(document.fileName) : 'Unknown';
         vscode.window.showInformationMessage(
-            `Istari session started for ${path.basename(document.fileName)}${docIdStr}`,
+            `Istari session started for ${fileName}${docIdStr}`,
             'Open Webview'
         ).then(selection => {
             if (selection === 'Open Webview') {
@@ -38,10 +44,12 @@ export class IstariWebviewState {
     }
 
     private createWebview(): void {
-        const istariDoc = getIstariDocumentByUri(this.document.uri.toString());
+        const istariDoc = getIstariDocumentByUri(this.uri);
         const docIdStr = istariDoc?.id ? ` (ID: ${istariDoc.id})` : '';
+        const document = this.document;
+        const fileName = document ? path.basename(document.fileName) : 'Unknown';
         this.webview = new IstariWebview(
-            `${path.basename(this.document.fileName)}${docIdStr}`,
+            `${fileName}${docIdStr}`,
             () => {
                 // Handle disposal - set webview to null
                 this.webview = null;

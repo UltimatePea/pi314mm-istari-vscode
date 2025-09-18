@@ -89,3 +89,20 @@ export function getDocumentByUri(uri: string): vscode.TextDocument | undefined {
 export function setMcpServer(server: IstariMCPServer | undefined) {
     mcpServer = server;
 }
+
+export async function restartMcpServer() {
+    console.log('Restarting MCP server...');
+
+    // Stop current server if it exists
+    if (mcpServer) {
+        await mcpServer.stop();
+        mcpServer = undefined;
+    }
+
+    // Start new server
+    const newServer = new IstariMCPServer();
+    await newServer.start();
+    setMcpServer(newServer);
+
+    console.log('MCP server restarted successfully');
+}

@@ -263,6 +263,15 @@ export class IstariMCPServer {
             required: ['document_id'],
           },
         },
+        {
+          name: 'restart_mcp_server',
+          description: 'Restart the MCP server (kills current server and starts a new one)',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
       ],
     }));
 
@@ -315,6 +324,9 @@ export class IstariMCPServer {
 
           case 'interrupt':
             return await this.interrupt((args as any).document_id);
+
+          case 'restart_mcp_server':
+            return await this.restartMcpServer();
 
           default:
             throw new McpError(
@@ -721,6 +733,25 @@ export class IstariMCPServer {
       params: params
     });
     return callResponse;
+  }
+
+  private async restartMcpServer(): Promise<any> {
+    // Import the global restart function to avoid circular dependencies
+    const { restartMcpServer } = require('./global');
+
+    // Schedule restart after sending response
+    setTimeout(() => {
+      restartMcpServer();
+    }, 100);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'MCP server restart initiated. The server will be stopped and restarted momentarily.',
+        },
+      ],
+    };
   }
 
   async stop() {

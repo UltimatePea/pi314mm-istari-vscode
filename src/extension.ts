@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { IstariMCPServer } from './mcp-server';
 import { startLSP } from './istari_lsp';
-import { mcpServer, setMcpServer, getCurrentIstari, getOrCreateIstariUI, setCurrentIstariUri, getIstariByUri } from './global';
+import { mcpServer, setMcpServer, getCurrentIstari, getOrCreateIstariUI, setCurrentIstariUri, getIstariByUri, restartMcpServer } from './global';
 import * as IstariHelper from './istari_ui_helper';
 
 
@@ -255,6 +255,16 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage('Istari MCP server started');
 		} else {
 			vscode.window.showInformationMessage('MCP server is already running');
+		}
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('istari.restartMcpServer', () => {
+		if (mcpServer) {
+			restartMcpServer();
+			vscode.window.showInformationMessage('Istari MCP server restarted');
+		} else {
+			startMcpServer();
+			vscode.window.showInformationMessage('Istari MCP server started (was not running)');
 		}
 	}));
 

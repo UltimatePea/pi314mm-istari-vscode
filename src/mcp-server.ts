@@ -162,78 +162,8 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'next_line',
-          description: 'Process the next line in the Istari proof',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              document_id: {
-                type: 'number',
-                description: 'The document ID to operate on',
-              },
-            },
-            required: ['document_id'],
-          },
-        },
-        {
-          name: 'prev_line',
-          description: 'Go back to the previous line in the Istari proof',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              document_id: {
-                type: 'number',
-                description: 'The document ID to operate on',
-              },
-            },
-            required: ['document_id'],
-          },
-        },
-        {
           name: 'get_document_status',
           description: 'Get the current status of an Istari document',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              document_id: {
-                type: 'number',
-                description: 'The document ID to operate on',
-              },
-            },
-            required: ['document_id'],
-          },
-        },
-        {
-          name: 'get_diagnostics',
-          description: 'Get diagnostics (errors/warnings) for a document',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              document_id: {
-                type: 'number',
-                description: 'The document ID to operate on',
-              },
-            },
-            required: ['document_id'],
-          },
-        },
-        {
-          name: 'restart_terminal',
-          description: 'Restart the Istari terminal',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              document_id: {
-                type: 'number',
-                description: 'The document ID to operate on',
-              },
-            },
-            required: ['document_id'],
-          },
-        },
-        {
-          name: 'interrupt',
-          description: 'Interrupt the current Istari execution',
           inputSchema: {
             type: 'object',
             properties: {
@@ -304,23 +234,8 @@ export class IstariMCPServer {
           case 'search_constants':
             return await this.searchConstants((args as any).document_id, (args as any).target);
 
-          case 'next_line':
-            return await this.nextLine((args as any).document_id);
-
-          case 'prev_line':
-            return await this.prevLine((args as any).document_id);
-
           case 'get_document_status':
             return await this.getDocumentStatus((args as any).document_id);
-
-          case 'get_diagnostics':
-            return await this.getDiagnostics((args as any).document_id);
-
-          case 'restart_terminal':
-            return await this.restartTerminal((args as any).document_id);
-
-          case 'interrupt':
-            return await this.interrupt((args as any).document_id);
 
           case 'restart_mcp_server':
             return await this.restartMcpServer();
@@ -477,34 +392,6 @@ export class IstariMCPServer {
     };
   }
 
-  private async nextLine(documentId: number): Promise<any> {
-    const doc = this.getDocumentById(documentId);
-    const output = await IstariHelper.nextLine(doc.ui);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: output,
-        },
-      ],
-    };
-  }
-
-  private async prevLine(documentId: number): Promise<any> {
-    const doc = this.getDocumentById(documentId);
-    const output = await IstariHelper.prevLine(doc.ui);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: output,
-        },
-      ],
-    };
-  }
-
   private async getDocumentStatus(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
     const status = IstariHelper.getDocumentStatus(doc.ui);
@@ -518,51 +405,6 @@ export class IstariMCPServer {
             uri: doc.uri,
             ...status
           }, null, 2),
-        },
-      ],
-    };
-  }
-
-  private async getDiagnostics(documentId: number): Promise<any> {
-    const doc = this.getDocumentById(documentId);
-    const diagnostics = IstariHelper.getDiagnostics(doc.ui);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            documentId: documentId,
-            ...diagnostics
-          }, null, 2),
-        },
-      ],
-    };
-  }
-
-  private async restartTerminal(documentId: number): Promise<any> {
-    const doc = this.getDocumentById(documentId);
-    const output = IstariHelper.restartTerminal(doc.ui);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: output,
-        },
-      ],
-    };
-  }
-
-  private async interrupt(documentId: number): Promise<any> {
-    const doc = this.getDocumentById(documentId);
-    const output = IstariHelper.interrupt(doc.ui);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: output,
         },
       ],
     };

@@ -76,8 +76,22 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'show_details',
-          description: 'Show current proof state details (equivalent to Prover.detail())',
+          name: 'show_current_goals',
+          description: 'Show current proof goals',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              document_id: {
+                type: 'number',
+                description: 'The document ID to operate on',
+              },
+            },
+            required: ['document_id'],
+          },
+        },
+        {
+          name: 'show_current_goals_verbosely',
+          description: 'Show current proof goals with verbose output',
           inputSchema: {
             type: 'object',
             properties: {
@@ -205,8 +219,11 @@ export class IstariMCPServer {
           case 'goto_line':
             return await this.gotoLine((args as any).document_id, (args as any).line);
 
-          case 'show_details':
-            return await this.showDetails((args as any).document_id);
+          case 'show_current_goals':
+            return await this.showCurrentGoals((args as any).document_id);
+
+          case 'show_current_goals_verbosely':
+            return await this.showCurrentGoalsVerbosely((args as any).document_id);
 
           case 'list_constants':
             return await this.listConstants((args as any).document_id, (args as any).module);
@@ -308,9 +325,22 @@ export class IstariMCPServer {
     };
   }
 
-  private async showDetails(documentId: number): Promise<any> {
+  private async showCurrentGoals(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
-    const result = await IstariHelper.showDetails(doc.ui);
+    const result = await IstariHelper.showCurrentGoals(doc.ui);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: result,
+        },
+      ],
+    };
+  }
+
+  private async showCurrentGoalsVerbosely(documentId: number): Promise<any> {
+    const doc = this.getDocumentById(documentId);
+    const result = await IstariHelper.showCurrentGoalsVerbosely(doc.ui);
     return {
       content: [
         {

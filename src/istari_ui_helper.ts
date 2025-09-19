@@ -169,6 +169,9 @@ export async function attemptTactic(istari: IstariUI, tactic: string): Promise<{
             };
         }
 
+        // Save the document after insertion
+        await document.save();
+
         // Now try to advance to the next line to verify the proof
         try {
             const result = await nextLine(istari);
@@ -221,6 +224,9 @@ async function rollbackTacticInsertion(document: vscode.TextDocument, lineIndex:
         );
         edit.delete(document.uri, lineToRemove);
         await vscode.workspace.applyEdit(edit);
+
+        // Save the document after rollback
+        await document.save();
     } catch (rollbackError) {
         console.error('Failed to rollback tactic insertion:', rollbackError);
     }

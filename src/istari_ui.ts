@@ -182,7 +182,7 @@ export class IstariUI {
         // this.write_stdin('\x02' + text + '\n');
         return new Promise((resolve) => {
             this.terminal.enqueueTask(new IstariTask(IstariInputCommand.interject, text, (data) => {
-                this.webview.appendText(data, 'interject');
+                this.webview.appendText(data, 'interject-' + text);
                 resolve(data);
                 return true;
             }));

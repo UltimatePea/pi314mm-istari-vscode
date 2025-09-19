@@ -54,21 +54,20 @@ export type IstariStatus = "ready" | "working" | "partialReady";
 /**
  * IstariEditor manages visual decorations for multiple editors of the same document.
  * It maintains a list of editors and fetches the document fresh from the URI when needed.
- * When editors are closed, they are automatically removed from the list.
+ * Disposed editors are lazily removed when decorations are updated or editors are accessed.
  */
 export class IstariEditor {
     private editors: Set<vscode.TextEditor>;
-    private editorCloseListeners: Map<vscode.TextEditor, vscode.Disposable>;
     private uri: string | undefined;
 
     constructor() {
         this.editors = new Set();
-        this.editorCloseListeners = new Map();
     }
 
 
     get editor(): vscode.TextEditor {
-        // Return the first available editor, or throw if none exist
+        this.removeDisposedEditors();
+
         const firstEditor = this.editors.values().next().value;
         if (!firstEditor) {
             throw new Error('No editors available');
@@ -88,31 +87,36 @@ export class IstariEditor {
 
         // Add editor to set
         this.editors.add(editor);
-
-        // Listen for when this editor is closed
-        const listener = vscode.window.onDidChangeVisibleTextEditors(() => {
-            // Check if this editor is still in the visible editors list
-            if (!vscode.window.visibleTextEditors.includes(editor)) {
-                // Editor was closed, remove it
-                this.removeEditor(editor);
-            }
-        });
-
-        this.editorCloseListeners.set(editor, listener);
     }
 
     private removeEditor(editor: vscode.TextEditor): void {
-        // Clear decorations from this specific editor before removing
-        this.clearDecorationsForEditor(editor);
-
         // Remove editor from set
         this.editors.delete(editor);
+    }
 
-        // Dispose and remove the listener
-        const listener = this.editorCloseListeners.get(editor);
-        if (listener) {
-            listener.dispose();
-            this.editorCloseListeners.delete(editor);
+    private isEditorDisposed(editor: vscode.TextEditor): boolean {
+        try {
+            // Try to access editor properties - if disposed, this will throw
+            editor.document.uri;
+            editor.viewColumn;
+            return false;
+        } catch {
+            // Editor is disposed
+            return true;
+        }
+    }
+
+    private removeDisposedEditors(): void {
+        const editorsToRemove: vscode.TextEditor[] = [];
+
+        for (const editor of this.editors) {
+            if (this.isEditorDisposed(editor)) {
+                editorsToRemove.push(editor);
+            }
+        }
+
+        for (const editor of editorsToRemove) {
+            this.removeEditor(editor);
         }
     }
 
@@ -124,15 +128,19 @@ export class IstariEditor {
     }
 
     hasEditors(): boolean {
+        this.removeDisposedEditors();
         return this.editors.size > 0;
     }
 
     getEditorCount(): number {
+        this.removeDisposedEditors();
         return this.editors.size;
     }
 
     updateDecorations(currentLine: number, requestedLine: number, status: IstariStatus): void {
-        // Apply decorations to all editors
+        this.removeDisposedEditors();
+
+        // Apply decorations to all remaining active editors
         for (const editor of this.editors) {
             this.updateDecorationsForEditor(editor, currentLine, requestedLine, status);
         }
@@ -205,7 +213,9 @@ export class IstariEditor {
     }
 
     clearDecorations(): void {
-        // Clear decorations from all editors
+        this.removeDisposedEditors();
+
+        // Clear decorations from all remaining active editors
         for (const editor of this.editors) {
             this.clearDecorationsForEditor(editor);
         }
@@ -223,6 +233,7 @@ export class IstariEditor {
     }
 
     getCursorLine(): number {
+        this.removeDisposedEditors();
         return this.editor.selection.active.line;
     }
 

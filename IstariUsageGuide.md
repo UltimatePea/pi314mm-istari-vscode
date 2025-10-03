@@ -179,9 +179,22 @@ Query: list_constants(doc_id,"List"), get_type(doc_id,"append"), get_definition(
 List: append, append_id_r (append xs nil = xs), append_assoc.
 Nat: plus_comm, plus_assoc, mult_comm, eqb.
 
-== PROOF PATTERN: Tail-call equivalence ==
+== MODULES ==
 
+openModule /Name/;           - Make module contents available without prefix. Ex: openModule /List/; (then use append instead of List.append)
+beginModule "Name";          - Start defining module. Ex: beginModule "MyModule";
+endModule ();                - Close current module. Ex: endModule ();
+alias /new/ /Mod.const/;     - Create alias to constant. Ex: alias /plus/ /Nat.plus/;
+
+Access: Use compound names Mod.const. Ex: Nat.plus, List.append, Bool.and.
+
+== COMMON PATTERNS ==
+
+Tail-call equivalence:
 1. defineInd ntc (non-tail-call) and tc (tail-call with accumulator)
-2. Prove helper (e.g., append reassociation)
-3. Prove STRONG: append (ntc xs) ys = tc xs ys (induction xs, use helper in cons)
+2. Prove helper (e.g., append reassociation: append xs (cons x ys) = append (append xs (cons x nil)) ys)
+3. Prove STRONG: append (ntc xs) ys = tc xs ys (induction xs, use helper in cons case)
 4. Main: instantiate strong with nil, rewrite append_id_r
+
+List induction template:
+  intro /i a xs/. induction /xs/. {reflexivity.} {intro /x xs' IH/. ...use IH... } qed();

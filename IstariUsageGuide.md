@@ -1,5 +1,7 @@
 ISTARI PROOF ASSISTANT REFERENCE
 
+SYNTAX: Terms/constructs enclosed in /.../ slashes. Slashes always come in pairs. Ex: intro /x y/. | rewrite /-> h/.
+
 MCP: open_document(path)→doc_id. goto_line(doc_id,line) jumps+auto-rewinds. attempt_tactic(doc_id,tactic) tries+validates+keeps/rollbacks. show_current_goals(doc_id).
 
 WORKFLOW: goto_line→show_current_goals→attempt_tactic loop until solved.
@@ -66,101 +68,71 @@ __ = placeholder in so/apply tactics (creates new subgoals)
 
 == TACTICS ==
 
-intro /pat1 pat2.../.
-- Introduce forall/arrow/intersect into context
-- Ex: intro /i a xs ys/.
+INTRODUCTION:
+intro /pat.../.         - Introduce forall/arrow/intersect. Ex: intro /i a xs/.
+intros.                 - Repeatedly intro, generating names. Ex: intros.
+split.                  - Intro product/unit/future (no choices). Ex: split.
+left. | right.          - Intro sum, select disjunct. Ex: left.
+exists /term/.          - Intro existential with witness. Ex: exists /0/.
+exact /term/.           - Prove goal with term. Ex: exact /h/.
 
-inference.
-- Run typechecker to instantiate evars
-- Ex: inference.
+HYPOTHESIS:
+hyp /h/.                - Prove goal if h's type matches. Ex: hyp /IH/.
+assumption.             - Prove goal if any hyp matches. Ex: assumption.
+clear /h1 h2/.          - Delete hypotheses. Ex: clear /tmp/.
+revert /h/.             - Move hyp into conclusion. Ex: revert /x/.
+set /name/ /term/.      - Create binding name=term. Ex: set /y/ /x+1/.
 
-induction /var/.
-- Induct on variable, creates case subgoals
-- Ex: induction /xs/.
+EQUALITY:
+reflexivity.            - Prove M=M:A. Ex: reflexivity.
+symmetry.               - M=N:A → N=M:A. Ex: symmetry.
+transitivity /term/.    - M=N:A via mediating term. Ex: transitivity /y/.
+compat.                 - Prove h M1..Mn = h N1..Nn : A by proving Mi=Ni:Bi. Ex: compat.
+injection /h/.          - Use constructor injectivity on h. Ex: injection /heq/.
 
-reflexivity.
-- Prove t = t : A
-- Ex: reflexivity.
+SUBSTITUTION:
+subst /h/.              - Find x=M in context, replace x→M. Ex: subst /heq/.
+substAll.               - All available substitutions. Ex: substAll.
 
-rewrite /-> eq [targets]/.
-- Rewrite left-to-right (M→N if eq : M=N:A), intermediate matching
-- Ex: rewrite /-> Nat.plus_comm/. | rewrite /-> h in concl/. | rewrite /-> eq in h at 0 1/.
+DESTRUCTION (patterns: _ discard, ? auto-name, x name, [p1 p2] product, {p1|p2} sum, 0 void):
+destruct /h/ /pat/.     - Destruct h matching pattern. Ex: destruct /h/ /x | y/. | destruct /h/ /x xs IH/.
+assert /A/ /pat/.       - Create subgoal for A, match pattern. Ex: assert /x=0:nat/ /heq/.
+inversion /h/.          - Copy h, destruct copy, discharge impossible cases. Ex: inversion /h/.
 
-rewrite /--> eq [targets]/.
-- Rewrite left-to-right, strict matching (no beta-equivalence)
-- Ex: rewrite /--> Nat.plus_assoc/.
+CHAINING (__ creates subgoals, _ for unification):
+so /term/ /pat/.        - Apply term (use __ for holes), match result. Ex: so /lemma __ x/ /h/.
+apply /term/.           - Backchain through term. Ex: apply /Nat.plus_comm/.
+exploit /term/ /pat/.   - If term : A1→...→An→B, create subgoals Ai, match B. Ex: exploit /lem/ /h/.
+witness /term/.         - Like exact but allows __. Ex: witness /cons x __ __/.
 
-rewrite /<- eq [targets]/.
-- Rewrite right-to-left (N→M if eq : M=N:A), intermediate matching
-- Ex: rewrite /<- append_id_r in h/.
+INDUCTION:
+induction /h/.          - Induct using iterator (requires well-formed conclusion). Ex: induction /xs/.
+sinduction /h/.         - Strong induction (works when conclusion not well-typed). Ex: sinduction /n/.
 
-rewrite /<-- eq [targets]/.
-- Rewrite right-to-left, strict matching
-- Ex: rewrite /<-- h at all/.
+TYPECHECKING:
+typecheck.              - Prove typechecking goal. Ex: typecheck.
+typecheck1.             - Run typechecker one layer. Ex: typecheck1.
+inference.              - Run typechecker for side-effects (instantiate evars). Ex: inference.
 
-so /term/ /name/.
-- Apply term (use __ for holes), bind result to name
-- Ex: so /lemma x __/ /h/.
+AUTO:
+auto.                   - Automated proving, depth 5. Ex: auto.
+nauto [n].              - Auto with depth n. Ex: nauto 10.
+autoWith /lem1 lem2/.   - Auto + backchain with lemmas. Ex: autoWith /Nat.plus_comm/.
 
-exact /term/.
-- Finish goal with term
-- Ex: exact /h/.
+REWRITING (see REWRITING section for details):
+rewrite /-> eq/.        - Rewrite left-to-right. Ex: rewrite /-> Nat.plus_comm/.
+rewrite /<- eq/.        - Rewrite right-to-left. Ex: rewrite /<- IH/.
+unfold /const/.         - Unfold definition. Ex: unfold /double/.
+fold /term/.            - Fold to term. Ex: fold /double x/.
+unroll /const/.         - Unroll recursive function. Ex: unroll /length/.
+reduce.                 - Normalize to normal form. Ex: reduce.
 
-split.
-- Intro product/unit/future (no choices)
-- Ex: split.
+MISC:
+exfalso.                - Replace goal with void. Ex: exfalso.
+generalize /M/ /A/ /x/. - Replace M in conclusion with new hyp x. Ex: generalize /x+y/ /nat/ /z/.
+remember /M/ /A/ /x/ /H/. - Like generalize + create H:(x=M:A). Ex: remember /x+y/ /nat/ /z/ /heq/.
 
-left. | right.
-- Intro sum (left/right disjunct)
-- Ex: left.
-
-exists /term/.
-- Intro existential with witness
-- Ex: exists /0/.
-
-destruct /hyp/ /pat/.
-- Destruct hypothesis matching pattern
-- Ex: destruct /h/ /x | y/. | destruct /h/ /x xs IH/.
-
-apply /term/.
-- Backchain through term (use __ for holes)
-- Ex: apply /Nat.plus_comm/.
-
-auto.
-- Automated proving (depth 5)
-- Ex: auto.
-
-typecheck.
-- Prove typechecking goal
-- Ex: typecheck.
-
-unfold /const [targets]/.
-- Unfold constant definition, then weak-head-normalize
-- Ex: unfold /double/. | unfold /f in h/. | unfold /g at 0/.
-
-fold /term [targets]/.
-- Fold target to become term (reverse of unfold)
-- Ex: fold /double x/. | fold /f a in h/.
-
-unroll /const [targets]/.
-- Unroll recursive function using unrolling reduction
-- Ex: unroll /length/. | unroll /factorial in h/.
-
-reduce [/targets/].
-- Normalize to normal form
-- Ex: reduce. | reduce /in h/. | reduce /in concl at 0/.
-
-assert /A/ /name/.
-- Create subgoal to prove A, bind to name
-- Ex: assert /x = 0 : nat/ /h/.
-
-subst /hyp/.
-- Find x=M in hyp, substitute x→M everywhere
-- Ex: subst /h/.
-
-exfalso.
-- Replace goal with void
-- Ex: exfalso.
+NOTE: Most tactics have Raw versions (introRaw, destructRaw, etc.) that skip typechecking. Avoid Raw - use standard versions that auto-typecheck.
 
 == REWRITING ==
 

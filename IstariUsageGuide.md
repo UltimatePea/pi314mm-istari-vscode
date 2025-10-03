@@ -26,6 +26,26 @@ reductions /lhs1 --> rhs1 ; lhs2 --> rhs2 ; unrolling name/;
 - Install reduction rules
 - Ex: reductions /length _ nil --> 0 ; length a (cons h t) --> succ (length a t) ; unrolling length/;
 
+== IMPLICIT & INVISIBLE ARGUMENTS ==
+
+{x} = implicit argument (auto-inserted as evar, resolved by unification)
+- Ex: define /double_list {a} l/ /.../ /intersect i . forall (a:U i) . list a -> list a/;
+- Usage: double_list mylist (a is auto-inferred)
+
+intersect i . forall (a:U i) . T = invisible argument i (not in term, only for typing)
+- Ex: List.map has type: intersect i . forall (a b : U i) . (a -> b) -> list a -> list b
+- Usage: List.map F L (i, a, b all auto-inferred)
+
+`f = suppress implicit arguments (use tick)
+- Ex: `append a xs ys (explicitly provide implicit a)
+- Ex: `List.map ap I A B F L (ap I provides invisible i=I, tick allows explicit A B)
+
+_ = placeholder for unification (single underscore)
+- Ex: `List.map _ _ F L (underscores filled by unification)
+
+__ = placeholder in so/apply tactics (creates new subgoals)
+- Ex: so /lemma __ x __/ /h/. (double underscores create proof obligations)
+
 == TACTICS ==
 
 intro /pat1 pat2.../.

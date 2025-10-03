@@ -357,6 +357,19 @@ export class IstariMCPServer {
   private async gotoLine(documentId: number, line: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
     
+    // Early check: line must not exceed document length
+    const document = doc.ui.getDocument();
+    if (line > document.lineCount) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error: Line ${line} exceeds document length (${document.lineCount} lines)`,
+          },
+        ],
+      };
+    }
+    
     // Validate that the previous line (if not line 1 and not rewinding) is a valid tactic
     const currentLine = doc.ui.currentLine;
     const isRewinding = line < currentLine;

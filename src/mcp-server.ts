@@ -382,12 +382,13 @@ export class IstariMCPServer {
         
         const isValidLine = isValidTactic || isValidDefinition;
         
-        if (previousLineText !== '' && !isValidLine) {
+        if (previousLineText === '' || !isValidLine) {
+          const emptyMsg = previousLineText === '' ? 'is empty' : `does not appear to be a valid tactic or definition: "${previousLineText}"`;
           return {
             content: [
               {
                 type: 'text',
-                text: `Warning: Previous line (${line - 1}) does not appear to be a valid tactic or definition: "${previousLineText}"\n` +
+                text: `Warning: Previous line (${line - 1}) ${emptyMsg}\n` +
                       `Valid tactics must end with "." or be "{" or "}". Valid definitions must end with ";". This may indicate a partial/ready state that could confuse AI agents.`,
               },
             ],

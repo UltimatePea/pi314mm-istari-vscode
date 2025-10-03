@@ -249,4 +249,18 @@ WHEN STUCK:
 - If still stuck after 2-3 attempts: STOP. Write summary of what you tried and ASK USER for help.
 - DO NOT keep attempting fixes - you'll waste time and create broken proofs. User intervention is faster.
 
+PROOF COMPLETION DETECTION:
+- Error "No proof underway. Current Line: <lineno>" indicates the proof has completed
+- This happens when attempting tactics after the proof is finished
+- When you see this error, the proof state is clean and no tactics are needed
+- At this time, it is best to reread document content to see the completed proof
+
 SUCCESS PATTERN: goto_line(N) → show_current_goals → attempt_tactic("tactic.") → verify → goto_line(N+1) → repeat
+
+== CRITICAL: ATTEMPT_TACTIC BEHAVIOR ==
+
+IMPORTANT: The attempt_tactic MCP call will INSERT the attempted tactic into the document ONLY if the tactic is successful. If the tactic fails, it will roll back the insertion, leaving the document unchanged.
+
+DOUBLE VISION WARNING: AI agents (especially GPT-5) may make mistakes by "double visioning" - seeing both the original document state and the modified state after attempt_tactic.
+
+Remember: attempt_tactic = edit document + goto_line + validation + keep if successful / rollback if failed

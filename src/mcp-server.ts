@@ -187,7 +187,7 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'attempt_tactic',
+          name: 'attempt_tactic_and_insert_if_successful',
           description: 'Try a tactic at the current line, insert it, verify it works by calling nextline, and either keep it (if line advances) or rollback (if it fails)',
           inputSchema: {
             type: 'object',
@@ -275,7 +275,7 @@ export class IstariMCPServer {
           case 'restart_mcp_server':
             return await this.restartMcpServer();
 
-          case 'attempt_tactic':
+          case 'attempt_tactic_and_insert_if_successful':
             return await this.attemptTactic((args as any).document_id, (args as any).tactic);
 
           case 'get_usage_guide':

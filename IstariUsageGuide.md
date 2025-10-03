@@ -2,15 +2,15 @@ ISTARI PROOF ASSISTANT REFERENCE
 
 SYNTAX: Terms/constructs enclosed in /.../ slashes. Slashes always come in pairs. Ex: intro /x y/. | rewrite /-> h/.
 
-MCP: open_document(path)→doc_id. verify_file_up_to_line(doc_id,line) jumps+auto-rewinds. attempt_tactic(doc_id,tactic) tries+validates+keeps/rollbacks. show_current_goals(doc_id).
+MCP: open_document(path)→doc_id. verify_file_up_to_line(doc_id,line) jumps+auto-rewinds. attempt_tactic_and_insert_if_successful(doc_id,tactic) tries+validates+keeps/rollbacks. show_current_goals(doc_id).
 
 IMPORTANT: verify_file_up_to_line verifies the file up to but not including the given line. You cannot skip a partial proof due to the semantics of verify_file_up_to_line. You need to work on proofs sequentially.
 
-WORKFLOW: verify_file_up_to_line→show_current_goals→attempt_tactic loop until solved.
+WORKFLOW: verify_file_up_to_line→show_current_goals→attempt_tactic_and_insert_if_successful loop until solved.
 
 CRITICAL ADVICE FOR AI AGENTS:
 - Verify EVERY tactic: AI agents have ~5% success rate per tactic attempt. Write 1 tactic, check goals, repeat.
-- NEVER write 5+ line proofs without verification - almost always wrong. Use attempt_tactic after each line.
+- NEVER write 5+ line proofs without verification - almost always wrong. Use attempt_tactic_and_insert_if_successful after each line.
 - Cursor must reach ; (end definition) or . (end tactic) for Istari to process. Partial syntax is never validated.
 - After EVERY tactic: verify_file_up_to_line to next line, show_current_goals to verify effect. No blind multi-line proofs.
 - If stuck: use auto, typecheck, or ask user. Don't guess complex tactics.
@@ -243,7 +243,7 @@ INCREMENTAL VERIFICATION (CRITICAL):
 NEVER:
 - Write multiple tactics without verification (>5% chance each fails = compounding failure)
 - Assume partial definitions/tactics are valid (Istari only validates at ; or .)
-- Write entire proofs blindly (use attempt_tactic line-by-line or user will waste time debugging)
+- Write entire proofs blindly (use attempt_tactic_and_insert_if_successful line-by-line or user will waste time debugging)
 
 WHEN STUCK:
 - Try auto. or typecheck. first (they often work)
@@ -257,12 +257,12 @@ PROOF COMPLETION DETECTION:
 - When you see this error, the proof state is clean and no tactics are needed
 - At this time, it is best to reread document content to see the completed proof
 
-SUCCESS PATTERN: verify_file_up_to_line(N) → show_current_goals → attempt_tactic("tactic.") → verify → verify_file_up_to_line(N+1) → repeat
+SUCCESS PATTERN: verify_file_up_to_line(N) → show_current_goals → attempt_tactic_and_insert_if_successful("tactic.") → verify → verify_file_up_to_line(N+1) → repeat
 
-== CRITICAL: ATTEMPT_TACTIC BEHAVIOR ==
+== CRITICAL: ATTEMPT_TACTIC_AND_INSERT_IF_SUCCESSFUL BEHAVIOR ==
 
-IMPORTANT: The attempt_tactic MCP call will INSERT the attempted tactic into the document ONLY if the tactic is successful. If the tactic fails, it will roll back the insertion, leaving the document unchanged.
+IMPORTANT: The attempt_tactic_and_insert_if_successful MCP call will INSERT the attempted tactic into the document ONLY if the tactic is successful. If the tactic fails, it will roll back the insertion, leaving the document unchanged.
 
-DOUBLE VISION WARNING: AI agents (especially GPT-5) may make mistakes by "double visioning" - seeing both the original document state and the modified state after attempt_tactic.
+DOUBLE VISION WARNING: AI agents (especially GPT-5) may make mistakes by "double visioning" - seeing both the original document state and the modified state after attempt_tactic_and_insert_if_successful.
 
-Remember: attempt_tactic = edit document + verify_file_up_to_line + validation + keep if successful / rollback if failed
+Remember: attempt_tactic_and_insert_if_successful = edit document + verify_file_up_to_line + validation + keep if successful / rollback if failed

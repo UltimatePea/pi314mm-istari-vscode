@@ -359,19 +359,19 @@ export class IstariMCPServer {
     
     // Early check: line must not exceed document length
     const document = doc.ui.getDocument();
+    const currentLine = doc.ui.currentLine;
     if (line > document.lineCount) {
       return {
         content: [
           {
             type: 'text',
-            text: `Error: Line ${line} exceeds document length (${document.lineCount} lines)`,
+            text: `Error: Line ${line} exceeds document length (${document.lineCount} lines). Current line: ${currentLine}`,
           },
         ],
       };
     }
     
     // Validate that the previous line (if not line 1 and not rewinding) is a valid tactic
-    const currentLine = doc.ui.currentLine;
     const isRewinding = line < currentLine;
     const isLineOne = line === 1;
     
@@ -401,7 +401,7 @@ export class IstariMCPServer {
             content: [
               {
                 type: 'text',
-                text: `goto_line requires previous line to end in . ; { or } but previous line is ${lineContent}`,
+                text: `goto_line requires previous line to end in . ; { or } but previous line is ${lineContent}. Current line: ${currentLine}`,
               },
             ],
           };
@@ -410,12 +410,13 @@ export class IstariMCPServer {
     }
     
     const output = await IstariHelper.gotoLine(doc.ui, line);
+    const finalCurrentLine = doc.ui.currentLine;
 
     return {
       content: [
         {
           type: 'text',
-          text: output,
+          text: `${output}\nCurrent line: ${finalCurrentLine}`,
         },
       ],
     };

@@ -4,6 +4,8 @@ SYNTAX: Terms/constructs enclosed in /.../ slashes. Slashes always come in pairs
 
 MCP: open_document(path)→doc_id. goto_line(doc_id,line) jumps+auto-rewinds. attempt_tactic(doc_id,tactic) tries+validates+keeps/rollbacks. show_current_goals(doc_id).
 
+IMPORTANT: goto_line verifies the file up to but not including the given line. You cannot skip a partial proof due to the semantics of goto_line. You need to work on proofs sequentially.
+
 WORKFLOW: goto_line→show_current_goals→attempt_tactic loop until solved.
 
 CRITICAL ADVICE FOR AI AGENTS:

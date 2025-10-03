@@ -69,68 +69,63 @@ __ = placeholder in so/apply tactics (creates new subgoals)
 == TACTICS ==
 
 INTRODUCTION:
-intro /pat.../.         - Introduce forall/arrow/intersect. Ex: intro /i a xs/.
-intros.                 - Repeatedly intro, generating names. Ex: intros.
-split.                  - Intro product/unit/future (no choices). Ex: split.
-left. | right.          - Intro sum, select disjunct. Ex: left.
-exists /term/.          - Intro existential with witness. Ex: exists /0/.
-exact /term/.           - Prove goal with term. Ex: exact /h/.
+intro /pat.../.         - Introduce forall/arrow/intersect.
+  Ex: Goal: forall i a xs ys . P → intro /i a xs ys/. → Context: i:level, a:U i, xs:list a, ys:list a |- P
+split.                  - Intro product/unit/future (no choices).
+left. | right.          - Intro sum, select disjunct.
+exists /term/.          - Intro existential with witness. Ex: Goal: exists x . P x → exists /0/. → Goal: P 0
+exact /term/.           - Prove goal with term. Ex: Goal: P, h:P |- P → exact /h/. → no goals
 
 HYPOTHESIS:
-hyp /h/.                - Prove goal if h's type matches. Ex: hyp /IH/.
-assumption.             - Prove goal if any hyp matches. Ex: assumption.
-clear /h1 h2/.          - Delete hypotheses. Ex: clear /tmp/.
-revert /h/.             - Move hyp into conclusion. Ex: revert /x/.
-set /name/ /term/.      - Create binding name=term. Ex: set /y/ /x+1/.
+assumption.             - Prove goal if any hyp matches. Ex: h:P |- P → assumption. → no goals
+clear /h1 h2/.          - Delete hypotheses.
+revert /h/.             - Move hyp into conclusion. Ex: x:A |- P → revert /x/. → Goal: forall (x:A) . P
 
 EQUALITY:
-reflexivity.            - Prove M=M:A. Ex: reflexivity.
-symmetry.               - M=N:A → N=M:A. Ex: symmetry.
-transitivity /term/.    - M=N:A via mediating term. Ex: transitivity /y/.
-compat.                 - Prove h M1..Mn = h N1..Nn : A by proving Mi=Ni:Bi. Ex: compat.
-injection /h/.          - Use constructor injectivity on h. Ex: injection /heq/.
+reflexivity.            - Prove M=M:A. Ex: Goal: x+0 = x+0 : nat → reflexivity. → no goals
+symmetry.               - M=N:A → N=M:A. Ex: Goal: y=x:nat → symmetry. → Goal: x=y:nat
+compat.                 - Prove h M1..Mn = h N1..Nn : A by proving Mi=Ni:Bi.
 
 SUBSTITUTION:
-subst /h/.              - Find x=M in context, replace x→M. Ex: subst /heq/.
-substAll.               - All available substitutions. Ex: substAll.
+subst /h/.              - Find x=M in context, replace x→M.
+  Ex: heq:x=0:nat |- P x → subst /heq/. → heq:x=0:nat |- P 0
 
 DESTRUCTION (patterns: _ discard, ? auto-name, x name, [p1 p2] product, {p1|p2} sum, 0 void):
-destruct /h/ /pat/.     - Destruct h matching pattern. Ex: destruct /h/ /x | y/. | destruct /h/ /x xs IH/.
-assert /A/ /pat/.       - Create subgoal for A, match pattern. Ex: assert /x=0:nat/ /heq/.
-inversion /h/.          - Copy h, destruct copy, discharge impossible cases. Ex: inversion /h/.
+destruct /h/ /pat/.     - Destruct h matching pattern.
+  Ex: h:A%B |- P → destruct /h/ /x | y/. → [goal1: x:A |- P] [goal2: y:B |- P]
+  Ex: h:list a |- P → destruct /h/ /| x xs/. → [goal1: |- P{nil/h}] [goal2: x:a, xs:list a |- P{cons x xs/h}]
+assert /A/ /pat/.       - Create subgoal for A, match pattern.
+  Ex: assert /x = 0 : nat/ /heq/. → [goal1: prove x=0:nat] [goal2: heq:x=0:nat |- original goal]
+inversion /h/.          - Copy h, destruct copy, discharge impossible cases.
 
 CHAINING (__ creates subgoals, _ for unification):
-so /term/ /pat/.        - Apply term (use __ for holes), match result. Ex: so /lemma __ x/ /h/.
-apply /term/.           - Backchain through term. Ex: apply /Nat.plus_comm/.
-exploit /term/ /pat/.   - If term : A1→...→An→B, create subgoals Ai, match B. Ex: exploit /lem/ /h/.
-witness /term/.         - Like exact but allows __. Ex: witness /cons x __ __/.
+so /term/ /pat/.        - Apply term (use __ for holes), match result.
+  Ex: so /lemma x __/ /h/. → [goal: prove arg2] [continues with: h:result |- original goal]
+apply /term/.           - Backchain through term.
+  Ex: Goal: P x, lemma:forall y . P y → apply /lemma/. → no goals
 
 INDUCTION:
-induction /h/.          - Induct using iterator (requires well-formed conclusion). Ex: induction /xs/.
-sinduction /h/.         - Strong induction (works when conclusion not well-typed). Ex: sinduction /n/.
+induction /h/.          - Induct using iterator (requires well-formed conclusion).
+  Ex: xs:list a |- P xs → induction /xs/. → [base: |- P nil] [step: x:a, xs:list a, IH:P xs |- P (cons x xs)]
 
 TYPECHECKING:
-typecheck.              - Prove typechecking goal. Ex: typecheck.
-typecheck1.             - Run typechecker one layer. Ex: typecheck1.
-inference.              - Run typechecker for side-effects (instantiate evars). Ex: inference.
+typecheck.              - Prove typechecking goal.
+inference.              - Run typechecker for side-effects (instantiate evars).
 
 AUTO:
-auto.                   - Automated proving, depth 5. Ex: auto.
-nauto [n].              - Auto with depth n. Ex: nauto 10.
-autoWith /lem1 lem2/.   - Auto + backchain with lemmas. Ex: autoWith /Nat.plus_comm/.
+auto.                   - Automated proving, depth 5.
+autoWith /lem1 lem2/.   - Auto + backchain with lemmas.
 
 REWRITING (see REWRITING section for details):
-rewrite /-> eq/.        - Rewrite left-to-right. Ex: rewrite /-> Nat.plus_comm/.
-rewrite /<- eq/.        - Rewrite right-to-left. Ex: rewrite /<- IH/.
-unfold /const/.         - Unfold definition. Ex: unfold /double/.
-fold /term/.            - Fold to term. Ex: fold /double x/.
-unroll /const/.         - Unroll recursive function. Ex: unroll /length/.
-reduce.                 - Normalize to normal form. Ex: reduce.
+rewrite /-> eq/.        - Rewrite left-to-right.
+  Ex: Goal: y::append xs' (x::ys) = RHS, IH:append xs' (x::ys) = append (append xs' (x::nil)) ys
+      → rewrite /<- IH/. → Goal: y::append xs' (x::ys) = y::append xs' (x::ys) (then reflexivity)
+rewrite /<- eq/.        - Rewrite right-to-left.
+unfold /const/.         - Unfold definition.
+reduce.                 - Normalize to normal form.
 
 MISC:
-exfalso.                - Replace goal with void. Ex: exfalso.
-generalize /M/ /A/ /x/. - Replace M in conclusion with new hyp x. Ex: generalize /x+y/ /nat/ /z/.
-remember /M/ /A/ /x/ /H/. - Like generalize + create H:(x=M:A). Ex: remember /x+y/ /nat/ /z/ /heq/.
+exfalso.                - Replace goal with void (use when you have contradiction).
 
 NOTE: Most tactics have Raw versions (introRaw, destructRaw, etc.) that skip typechecking. Avoid Raw - use standard versions that auto-typecheck.
 

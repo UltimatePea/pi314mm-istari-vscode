@@ -28,85 +28,85 @@ reductions /lhs1 --> rhs1 ; lhs2 --> rhs2 ; unrolling name/;
 
 == TACTICS ==
 
-intro /pat1 pat2.../
+intro /pat1 pat2.../.
 - Introduce forall/arrow/intersect into context
-- Ex: intro /i a xs ys/
+- Ex: intro /i a xs ys/.
 
-inference
+inference.
 - Run typechecker to instantiate evars
-- Ex: inference
+- Ex: inference.
 
-induction /var/
+induction /var/.
 - Induct on variable, creates case subgoals
-- Ex: induction /xs/
+- Ex: induction /xs/.
 
-reflexivity
+reflexivity.
 - Prove t = t : A
-- Ex: reflexivity
+- Ex: reflexivity.
 
-rewrite /-> eq [in h]/
+rewrite /-> eq [in h]/.
 - Rewrite left-to-right (omit "in h" for conclusion)
-- Ex: rewrite /-> Nat.plus_comm/ | rewrite /-> h in concl/
+- Ex: rewrite /-> Nat.plus_comm/. | rewrite /-> h in concl/.
 
-rewrite /<- eq [in h]/
+rewrite /<- eq [in h]/.
 - Rewrite right-to-left
-- Ex: rewrite /<- append_id_r in h/
+- Ex: rewrite /<- append_id_r in h/.
 
-so /term/ /name/
+so /term/ /name/.
 - Apply term (use __ for holes), bind result to name
-- Ex: so /lemma x __/ /h/
+- Ex: so /lemma x __/ /h/.
 
-exact /term/
+exact /term/.
 - Finish goal with term
-- Ex: exact /h/
+- Ex: exact /h/.
 
-split
+split.
 - Intro product/unit/future (no choices)
-- Ex: split
+- Ex: split.
 
-left | right
+left. | right.
 - Intro sum (left/right disjunct)
-- Ex: left
+- Ex: left.
 
-exists /term/
+exists /term/.
 - Intro existential with witness
-- Ex: exists /0/
+- Ex: exists /0/.
 
-destruct /hyp/ /pat/
+destruct /hyp/ /pat/.
 - Destruct hypothesis matching pattern
-- Ex: destruct /h/ /x | y/ | destruct /h/ /x xs IH/
+- Ex: destruct /h/ /x | y/. | destruct /h/ /x xs IH/.
 
-apply /term/
+apply /term/.
 - Backchain through term (use __ for holes)
-- Ex: apply /Nat.plus_comm/
+- Ex: apply /Nat.plus_comm/.
 
-auto
+auto.
 - Automated proving (depth 5)
-- Ex: auto
+- Ex: auto.
 
-typecheck
+typecheck.
 - Prove typechecking goal
-- Ex: typecheck
+- Ex: typecheck.
 
-unfold /const [in h]/
+unfold /const [in h]/.
 - Unfold constant definition
-- Ex: unfold /double/ | unfold /f in h/
+- Ex: unfold /double/. | unfold /f in h/.
 
-reduce [/in h/]
+reduce [/in h/].
 - Normalize to normal form
-- Ex: reduce | reduce /in h/
+- Ex: reduce. | reduce /in h/.
 
-assert /A/ /name/
+assert /A/ /name/.
 - Create subgoal to prove A, bind to name
-- Ex: assert /x = 0 : nat/ /h/
+- Ex: assert /x = 0 : nat/ /h/.
 
-subst /hyp/
+subst /hyp/.
 - Find x=M in hyp, substitute x→M everywhere
-- Ex: subst /h/
+- Ex: subst /h/.
 
-exfalso
+exfalso.
 - Replace goal with void
-- Ex: exfalso
+- Ex: exfalso.
 
 == LIBS ==
 

@@ -2,17 +2,17 @@ ISTARI PROOF ASSISTANT REFERENCE
 
 SYNTAX: Terms/constructs enclosed in /.../ slashes. Slashes always come in pairs. Ex: intro /x y/. | rewrite /-> h/.
 
-MCP: open_document(path)→doc_id. goto_line(doc_id,line) jumps+auto-rewinds. attempt_tactic(doc_id,tactic) tries+validates+keeps/rollbacks. show_current_goals(doc_id).
+MCP: open_document(path)→doc_id. verify_file_up_to_line(doc_id,line) jumps+auto-rewinds. attempt_tactic(doc_id,tactic) tries+validates+keeps/rollbacks. show_current_goals(doc_id).
 
-IMPORTANT: goto_line verifies the file up to but not including the given line. You cannot skip a partial proof due to the semantics of goto_line. You need to work on proofs sequentially.
+IMPORTANT: verify_file_up_to_line verifies the file up to but not including the given line. You cannot skip a partial proof due to the semantics of verify_file_up_to_line. You need to work on proofs sequentially.
 
-WORKFLOW: goto_line→show_current_goals→attempt_tactic loop until solved.
+WORKFLOW: verify_file_up_to_line→show_current_goals→attempt_tactic loop until solved.
 
 CRITICAL ADVICE FOR AI AGENTS:
 - Verify EVERY tactic: AI agents have ~5% success rate per tactic attempt. Write 1 tactic, check goals, repeat.
 - NEVER write 5+ line proofs without verification - almost always wrong. Use attempt_tactic after each line.
 - Cursor must reach ; (end definition) or . (end tactic) for Istari to process. Partial syntax is never validated.
-- After EVERY tactic: goto_line to next line, show_current_goals to verify effect. No blind multi-line proofs.
+- After EVERY tactic: verify_file_up_to_line to next line, show_current_goals to verify effect. No blind multi-line proofs.
 - If stuck: use auto, typecheck, or ask user. Don't guess complex tactics.
 
 == THEOREMS & GOAL MANAGEMENT ==
@@ -235,7 +235,7 @@ List induction template:
 
 INCREMENTAL VERIFICATION (CRITICAL):
 1. Write ONE tactic (ending with .)
-2. Use goto_line to move to next line (triggers Istari processing)
+2. Use verify_file_up_to_line to move to next line (triggers Istari processing)
 3. Use show_current_goals to verify the tactic worked
 4. Check goal count, context, conclusion match expectations
 5. If wrong: rewind, fix, repeat. If right: continue to next tactic.
@@ -257,7 +257,7 @@ PROOF COMPLETION DETECTION:
 - When you see this error, the proof state is clean and no tactics are needed
 - At this time, it is best to reread document content to see the completed proof
 
-SUCCESS PATTERN: goto_line(N) → show_current_goals → attempt_tactic("tactic.") → verify → goto_line(N+1) → repeat
+SUCCESS PATTERN: verify_file_up_to_line(N) → show_current_goals → attempt_tactic("tactic.") → verify → verify_file_up_to_line(N+1) → repeat
 
 == CRITICAL: ATTEMPT_TACTIC BEHAVIOR ==
 
@@ -265,4 +265,4 @@ IMPORTANT: The attempt_tactic MCP call will INSERT the attempted tactic into the
 
 DOUBLE VISION WARNING: AI agents (especially GPT-5) may make mistakes by "double visioning" - seeing both the original document state and the modified state after attempt_tactic.
 
-Remember: attempt_tactic = edit document + goto_line + validation + keep if successful / rollback if failed
+Remember: attempt_tactic = edit document + verify_file_up_to_line + validation + keep if successful / rollback if failed

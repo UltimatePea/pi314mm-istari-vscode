@@ -60,7 +60,7 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'goto_line',
+          name: 'verify_file_up_to_line',
           description: 'Navigate to a specific line in the Istari proof document. Verifies the file up to but not including the given line (1-indexed)',
           inputSchema: {
             type: 'object',
@@ -250,7 +250,7 @@ export class IstariMCPServer {
           case 'list_documents':
             return await this.listDocuments();
 
-          case 'goto_line':
+          case 'verify_file_up_to_line':
             return await this.gotoLine((args as any).document_id, (args as any).line);
 
           case 'show_current_goals':
@@ -401,7 +401,7 @@ export class IstariMCPServer {
             content: [
               {
                 type: 'text',
-                text: `goto_line requires previous line to end in . ; { or } but previous line is ${lineContent}. Current line: ${currentLine}`,
+                text: `verify_file_up_to_line requires previous line to end in . ; { or } but previous line is ${lineContent}. Current line: ${currentLine}`,
               },
             ],
           };

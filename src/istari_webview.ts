@@ -19,7 +19,7 @@ export let webviewHTML = `
 							// Add reason indicator if present
 							if (message.reason && message.reason !== 'output') {
 								const reasonSpan = document.createElement("span");
-								reasonSpan.textContent = '[' + message.reason.toUpperCase() + '] ';
+								reasonSpan.textContent = '[' + message.reason + '] ';
 								reasonSpan.style.fontWeight = 'bold';
 								reasonSpan.style.color = message.reason.startsWith('mcp') ? '#ff6b35' : '#4a90e2';
 								new_div.appendChild(reasonSpan);

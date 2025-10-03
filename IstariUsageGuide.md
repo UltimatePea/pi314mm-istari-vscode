@@ -2,6 +2,8 @@ ISTARI PROOF ASSISTANT REFERENCE
 
 SYNTAX: Terms/constructs enclosed in /.../ slashes. Slashes always come in pairs. Ex: intro /x y/. | rewrite /-> h/.
 
+TYPE JUDGMENTS: (a : T) is a very different term from a, where the former is a judgment as a term. It is never the case that (a : T) : T.
+
 MCP: open_document(path)→doc_id. verify_file_up_to_line(doc_id,line) jumps+auto-rewinds. attempt_tactic_and_insert_if_successful(doc_id,tactic) tries+validates+keeps/rollbacks. show_current_goals(doc_id).
 
 IMPORTANT: verify_file_up_to_line verifies the file up to but not including the given line. You cannot skip a partial proof due to the semantics of verify_file_up_to_line. You need to work on proofs sequentially.

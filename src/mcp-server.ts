@@ -1,5 +1,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import * as http from 'http';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -202,6 +204,15 @@ export class IstariMCPServer {
             required: ['document_id', 'tactic'],
           },
         },
+        {
+          name: 'get_usage_guide',
+          description: 'Get the Istari proof assistant usage guide with syntax, tactics, and best practices',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
       ],
     }));
 
@@ -243,6 +254,9 @@ export class IstariMCPServer {
 
           case 'attempt_tactic':
             return await this.attemptTactic((args as any).document_id, (args as any).tactic);
+
+          case 'get_usage_guide':
+            return await this.getUsageGuide();
 
           default:
             throw new McpError(
@@ -600,6 +614,31 @@ export class IstariMCPServer {
         },
       ],
     };
+  }
+
+  private async getUsageGuide(): Promise<any> {
+    try {
+      // Get the extension's root directory
+      const extensionRoot = path.dirname(__dirname);
+      const usageGuidePath = path.join(extensionRoot, 'IstariUsageGuide.md');
+      
+      // Read the usage guide file
+      const usageGuideContent = fs.readFileSync(usageGuidePath, 'utf-8');
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: usageGuideContent,
+          },
+        ],
+      };
+    } catch (error) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to read usage guide: ${(error as Error).message}`
+      );
+    }
   }
 
   async stop() {

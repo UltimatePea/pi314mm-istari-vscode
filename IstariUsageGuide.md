@@ -6,6 +6,29 @@ MCP: open_document(path)→doc_id. goto_line(doc_id,line) jumps+auto-rewinds. at
 
 WORKFLOW: goto_line→show_current_goals→attempt_tactic loop until solved.
 
+== THEOREMS & GOAL MANAGEMENT ==
+
+lemma "name" /statement/;    - Start theorem. Ex: lemma "my_thm" /forall x . P x/;
+qed ();                      - Finish proof (no goals at depth 0). Ex: qed ();
+
+GOAL STACK (depth tracking):
+{ - Enter first goal (push others to stack, depth+1). REQUIRED when multiple goals. Ex: 2 goals → { → 1 goal (depth 1)
+} - Exit current level (pop stack, depth-1). Use when "no goals (depth N>0)". Ex: no goals (depth 1) → } → back to depth 0
+n:{ - Enter goal n (0-indexed). Ex: 1:{ enters second goal.
+
+RULES:
+- Can only apply tactics when exactly 1 goal active (not 0, not 2+)
+- Multiple goals (e.g., after split, destruct): MUST use { to enter one
+- "no goals (depth N)" where N>0: MUST use } to exit
+- "no goals (depth 0)": proof complete, use qed();
+
+EXAMPLE:
+  lemma "ex" /a -> b -> a & b/;
+  intro /x y/. split.           → 2 goals (depth 0) [goal 0: a] [goal 1: b]
+  { hyp /x/. }                  → enter goal 0, solve, exit → 1 goal (depth 0)
+  hyp /y/.                      → solve remaining goal → no goals (depth 0)
+  qed ();
+
 == DEFINITIONS ==
 
 define /name {implicit} args/ /body/ /type/;

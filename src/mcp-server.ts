@@ -61,7 +61,7 @@ export class IstariMCPServer {
         },
         {
           name: 'goto_line',
-          description: 'Navigate to a specific line in the Istari proof document',
+          description: 'Navigate to a specific line in the Istari proof document. Verifies the file up to but not including the given line (1-indexed)',
           inputSchema: {
             type: 'object',
             properties: {
@@ -71,7 +71,7 @@ export class IstariMCPServer {
               },
               line: {
                 type: 'number',
-                description: 'The line number to navigate to (1-indexed)',
+                description: 'The line number to navigate to (1-indexed). File is verified up to but not including this line',
               },
             },
             required: ['document_id', 'line'],

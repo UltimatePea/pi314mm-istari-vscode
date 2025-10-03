@@ -64,13 +64,21 @@ reflexivity.
 - Prove t = t : A
 - Ex: reflexivity.
 
-rewrite /-> eq [in h]/.
-- Rewrite left-to-right (omit "in h" for conclusion)
-- Ex: rewrite /-> Nat.plus_comm/. | rewrite /-> h in concl/.
+rewrite /-> eq [targets]/.
+- Rewrite left-to-right (M→N if eq : M=N:A), intermediate matching
+- Ex: rewrite /-> Nat.plus_comm/. | rewrite /-> h in concl/. | rewrite /-> eq in h at 0 1/.
 
-rewrite /<- eq [in h]/.
-- Rewrite right-to-left
+rewrite /--> eq [targets]/.
+- Rewrite left-to-right, strict matching (no beta-equivalence)
+- Ex: rewrite /--> Nat.plus_assoc/.
+
+rewrite /<- eq [targets]/.
+- Rewrite right-to-left (N→M if eq : M=N:A), intermediate matching
 - Ex: rewrite /<- append_id_r in h/.
+
+rewrite /<-- eq [targets]/.
+- Rewrite right-to-left, strict matching
+- Ex: rewrite /<-- h at all/.
 
 so /term/ /name/.
 - Apply term (use __ for holes), bind result to name
@@ -108,13 +116,21 @@ typecheck.
 - Prove typechecking goal
 - Ex: typecheck.
 
-unfold /const [in h]/.
-- Unfold constant definition
-- Ex: unfold /double/. | unfold /f in h/.
+unfold /const [targets]/.
+- Unfold constant definition, then weak-head-normalize
+- Ex: unfold /double/. | unfold /f in h/. | unfold /g at 0/.
 
-reduce [/in h/].
+fold /term [targets]/.
+- Fold target to become term (reverse of unfold)
+- Ex: fold /double x/. | fold /f a in h/.
+
+unroll /const [targets]/.
+- Unroll recursive function using unrolling reduction
+- Ex: unroll /length/. | unroll /factorial in h/.
+
+reduce [/targets/].
 - Normalize to normal form
-- Ex: reduce. | reduce /in h/.
+- Ex: reduce. | reduce /in h/. | reduce /in concl at 0/.
 
 assert /A/ /name/.
 - Create subgoal to prove A, bind to name
@@ -127,6 +143,47 @@ subst /hyp/.
 exfalso.
 - Replace goal with void
 - Ex: exfalso.
+
+== REWRITING ==
+
+TARGETS: [in hyp] [at occurrences] | at occurrences (for concl) | (empty = "in concl at 0")
+- occurrences: 0 1 2 (hit numbers, pre-order left-to-right) | pos 0 1 2 (positions) | all
+- Ex: rewrite /-> h/. = rewrite in concl at first occurrence
+- Ex: rewrite /-> h in concl at all/. = rewrite all occurrences in conclusion
+- Ex: rewrite /-> h in eq at 0 1/. = rewrite hits 0,1 in hypothesis eq
+
+BASIC REWRITING:
+rewrite /-> eq/. - Replace M with N (if eq : M=N:A), searches conclusion at hit 0
+rewrite /<- eq/. - Replace N with M (reverse direction)
+rewrite /-> eq in h/. - Rewrite in hypothesis h
+rewrite /-> eq in h at all/. - Rewrite all occurrences in h
+
+EXAMPLE (from list_reverse.ist):
+Goal: y :: append xs' (x :: ys) = y :: append (append xs' (x :: nil)) ys : list a
+IH : append xs' (x :: ys) = append (append xs' (x :: nil)) ys : list a
+Tactic: rewrite /<- IH/.
+Result: y :: append xs' (x :: ys) = y :: append xs' (x :: ys) : list a (now trivial by reflexivity)
+
+EXAMPLE 2 (from list_reverse.ist):
+Goal: reverse_ntc xs = reverse_tc xs nil : list a
+H : append (reverse_ntc xs) nil = reverse_tc xs nil : list a
+Tactic: rewrite /-> append_id_r in H/.
+Result: H becomes: reverse_ntc xs = reverse_tc xs nil : list a (then exact /H/.)
+
+STRICT vs INTERMEDIATE:
+- Intermediate (->, <-): Allows beta-equivalence, same head required (FAST, use by default)
+- Strict (-->, <--): Exact syntactic match, no beta (use when intermediate fails or is ambiguous)
+- When to use strict: Goal is "P (0 + 1 + x)", rewriting with "plus_assoc" on "E1+E2+E3" fails in intermediate mode because "0+1" beta-reduces to "1", use "--> plus_assoc" instead
+
+OTHER REWRITES:
+rewrite /M = N : A/. - Replace M with N, creates new subgoal to prove M=N:A
+unfold /const/. - Unfold definition + weak-head-normalize
+fold /term/. - Reverse of unfold
+unroll /const/. - Unroll recursive function (for definerec)
+reduce. - Normalize to normal form
+whreduce. - Weak-head-normalize only
+
+Supported relations: eq (=), eqtp (type eq), iff (<->), subtype (<:), implies.
 
 == LIBS ==
 

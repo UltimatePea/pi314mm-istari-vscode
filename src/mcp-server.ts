@@ -356,6 +356,46 @@ export class IstariMCPServer {
 
   private async gotoLine(documentId: number, line: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
+    
+    // Validate that the previous line (if not line 1 and not rewinding) is a valid tactic
+    const currentLine = doc.ui.currentLine;
+    const isRewinding = line < currentLine;
+    const isLineOne = line === 1;
+    
+    if (!isLineOne && !isRewinding && line > 1) {
+      // Check the previous line (line - 1) for valid tactic format
+      const document = doc.ui.getDocument();
+      const previousLineIndex = line - 2; // Convert to 0-based index
+      
+      if (previousLineIndex >= 0 && previousLineIndex < document.lineCount) {
+        const previousLine = document.lineAt(previousLineIndex);
+        const previousLineText = previousLine.text.trim();
+        
+        // Check if previous line is a valid tactic or definition
+        // Valid tactics end with . or are {/}
+        // Definitions end with ; (define, definerec, typedef, etc.)
+        const isValidTactic = previousLineText.endsWith('.') ||
+                             previousLineText === '{' ||
+                             previousLineText === '}';
+        
+        const isValidDefinition = previousLineText.endsWith(';');
+        
+        const isValidLine = isValidTactic || isValidDefinition;
+        
+        if (previousLineText !== '' && !isValidLine) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Warning: Previous line (${line - 1}) does not appear to be a valid tactic or definition: "${previousLineText}"\n` +
+                      `Valid tactics must end with "." or be "{" or "}". Valid definitions must end with ";". This may indicate a partial/ready state that could confuse AI agents.`,
+              },
+            ],
+          };
+        }
+      }
+    }
+    
     const output = await IstariHelper.gotoLine(doc.ui, line);
 
     return {

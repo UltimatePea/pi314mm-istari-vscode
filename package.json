@@ -175,6 +175,10 @@
         "title": "Istari: Install Claude MCP (claude mcp add istari-vscode http://localhost:47821/mcp -s user -t http)"
       },
       {
+        "command": "istari.installCodexMcp",
+        "title": "Istari: Install Codex CLI MCP (codex mcp add -- npx mcp-remote http://localhost:47821/mcp --allow-http --transport http-only)"
+      },
+      {
         "command": "istari.showWebview",
         "title": "Istari: Show Webview"
       },

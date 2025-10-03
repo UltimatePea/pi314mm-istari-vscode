@@ -316,6 +316,24 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 	}));
 
+	context.subscriptions.push(vscode.commands.registerCommand('istari.installCodexMcp', () => {
+		const command = 'codex mcp add -- npx mcp-remote http://localhost:47821/mcp --allow-http --transport http-only';
+
+		vscode.window.showInformationMessage(
+			`This will run: ${command}`,
+			'Install', 'Cancel'
+		).then((selection) => {
+			if (selection === 'Install') {
+				// Execute the Codex CLI MCP install command
+				const terminal = vscode.window.createTerminal('Codex CLI MCP Install');
+				terminal.show();
+				terminal.sendText(command);
+
+				vscode.window.showInformationMessage('Codex CLI MCP installation command executed. Make sure to start the MCP server first if not already running.');
+			}
+		});
+	}));
+
 	context.subscriptions.push(vscode.commands.registerCommand('istari.showWebview', () => {
 		let istari = getCurrentIstari();
 		if (istari) {

@@ -213,6 +213,29 @@ export class IstariMCPServer {
             required: [],
           },
         },
+        {
+          name: 'list_documentation_paths',
+          description: 'List all available documentation file paths (markdown files only)',
+          inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+        {
+          name: 'get_documentation',
+          description: 'Get the content of a specific documentation file by path',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              path: {
+                type: 'string',
+                description: 'The relative path to the documentation file (e.g., "basis/list.md" or "tactics.md")',
+              },
+            },
+            required: ['path'],
+          },
+        },
       ],
     }));
 
@@ -257,6 +280,12 @@ export class IstariMCPServer {
 
           case 'get_usage_guide':
             return await this.getUsageGuide();
+
+          case 'list_documentation_paths':
+            return await this.listDocumentationPaths();
+
+          case 'get_documentation':
+            return await this.getDocumentation((args as any).path);
 
           default:
             throw new McpError(
@@ -637,6 +666,108 @@ export class IstariMCPServer {
       throw new McpError(
         ErrorCode.InternalError,
         `Failed to read usage guide: ${(error as Error).message}`
+      );
+    }
+  }
+
+  private async listDocumentationPaths(): Promise<any> {
+    try {
+      // Get the extension's root directory
+      const extensionRoot = path.dirname(__dirname);
+      const docsDir = path.join(extensionRoot, 'istari_docs');
+      
+      const markdownFiles: string[] = [];
+      
+      // Recursively find all .md files
+      const findMarkdownFiles = (dir: string, relativePath: string = ''): void => {
+        const items = fs.readdirSync(dir);
+        
+        for (const item of items) {
+          const fullPath = path.join(dir, item);
+          const relativeItemPath = relativePath ? path.join(relativePath, item) : item;
+          
+          if (fs.statSync(fullPath).isDirectory()) {
+            // Recursively search subdirectories
+            findMarkdownFiles(fullPath, relativeItemPath);
+          } else if (item.endsWith('.md')) {
+            // Add .md files to the list
+            markdownFiles.push(relativeItemPath);
+          }
+        }
+      };
+      
+      findMarkdownFiles(docsDir);
+      
+      // Sort the files for consistent output
+      markdownFiles.sort();
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(markdownFiles, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to list documentation paths: ${(error as Error).message}`
+      );
+    }
+  }
+
+  private async getDocumentation(filePath: string): Promise<any> {
+    try {
+      // Get the extension's root directory
+      const extensionRoot = path.dirname(__dirname);
+      const docsDir = path.join(extensionRoot, 'istari_docs');
+      const fullPath = path.join(docsDir, filePath);
+      
+      // Security check: ensure the path is within the docs directory
+      const resolvedPath = path.resolve(fullPath);
+      const resolvedDocsDir = path.resolve(docsDir);
+      
+      if (!resolvedPath.startsWith(resolvedDocsDir)) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          'Invalid file path: path must be within the istari_docs directory'
+        );
+      }
+      
+      // Check if file exists and is a .md file
+      if (!fs.existsSync(fullPath)) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `Documentation file not found: ${filePath}`
+        );
+      }
+      
+      if (!filePath.endsWith('.md')) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          'Only markdown (.md) files are supported'
+        );
+      }
+      
+      // Read the documentation file
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: content,
+          },
+        ],
+      };
+    } catch (error) {
+      if (error instanceof McpError) {
+        throw error;
+      }
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Failed to read documentation file: ${(error as Error).message}`
       );
     }
   }

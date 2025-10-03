@@ -6,6 +6,13 @@ MCP: open_document(path)→doc_id. goto_line(doc_id,line) jumps+auto-rewinds. at
 
 WORKFLOW: goto_line→show_current_goals→attempt_tactic loop until solved.
 
+CRITICAL ADVICE FOR AI AGENTS:
+- Verify EVERY tactic: AI agents have ~5% success rate per tactic attempt. Write 1 tactic, check goals, repeat.
+- NEVER write 5+ line proofs without verification - almost always wrong. Use attempt_tactic after each line.
+- Cursor must reach ; (end definition) or . (end tactic) for Istari to process. Partial syntax is never validated.
+- After EVERY tactic: goto_line to next line, show_current_goals to verify effect. No blind multi-line proofs.
+- If stuck: use auto, typecheck, or ask user. Don't guess complex tactics.
+
 == THEOREMS & GOAL MANAGEMENT ==
 
 lemma "name" /statement/;    - Start theorem. Ex: lemma "my_thm" /forall x . P x/;
@@ -221,3 +228,25 @@ Tail-call equivalence:
 
 List induction template:
   intro /i a xs/. induction /xs/. {reflexivity.} {intro /x xs' IH/. ...use IH... } qed();
+
+== AI AGENT BEST PRACTICES ==
+
+INCREMENTAL VERIFICATION (CRITICAL):
+1. Write ONE tactic (ending with .)
+2. Use goto_line to move to next line (triggers Istari processing)
+3. Use show_current_goals to verify the tactic worked
+4. Check goal count, context, conclusion match expectations
+5. If wrong: rewind, fix, repeat. If right: continue to next tactic.
+
+NEVER:
+- Write multiple tactics without verification (>5% chance each fails = compounding failure)
+- Assume partial definitions/tactics are valid (Istari only validates at ; or .)
+- Write entire proofs blindly (use attempt_tactic line-by-line or user will waste time debugging)
+
+WHEN STUCK:
+- Try auto. or typecheck. first (they often work)
+- Use simpler tactics: reflexivity, assumption before complex rewrites
+- If still stuck after 2-3 attempts: STOP. Write summary of what you tried and ASK USER for help.
+- DO NOT keep attempting fixes - you'll waste time and create broken proofs. User intervention is faster.
+
+SUCCESS PATTERN: goto_line(N) → show_current_goals → attempt_tactic("tactic.") → verify → goto_line(N+1) → repeat

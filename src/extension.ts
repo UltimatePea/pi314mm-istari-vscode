@@ -317,7 +317,7 @@ export function activate(context: vscode.ExtensionContext) {
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand('istari.installCodexMcp', () => {
-		const command = 'codex mcp add -- npx mcp-remote http://localhost:47821/mcp --allow-http --transport http-only';
+		const command = 'codex mcp add istari-vscode -- npx mcp-remote http://localhost:47821/mcp --allow-http --transport http-only';
 
 		vscode.window.showInformationMessage(
 			`This will run: ${command}`,

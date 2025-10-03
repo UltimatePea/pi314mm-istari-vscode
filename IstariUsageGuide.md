@@ -1,0 +1,1 @@
+Istari is an interactive proof assistant based on the Martin-Lof type theory. The notable difference is that type judgments need to be proven manually (with automation). 

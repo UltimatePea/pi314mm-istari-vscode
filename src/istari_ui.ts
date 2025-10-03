@@ -302,6 +302,7 @@ export class IstariUI {
     async nextLine(source: 'user' | 'mcp' = 'user'): Promise<string> {
         console.log("nextLine not implemented");
         if (this._currentLine < this.istariEditor.getLineCount(this.getDocument())) {
+            this._requestedLine = this._currentLine + 1;
             let text = this.istariEditor.getTextRange(this.getDocument(), this._currentLine - 1, this._currentLine);
             return await this.sendLines(text, source);
         } else {

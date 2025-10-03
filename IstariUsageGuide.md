@@ -6,25 +6,43 @@ WORKFLOW: goto_line→show_current_goals→attempt_tactic loop until solved.
 
 == DEFINITIONS ==
 
-define /name args/ /body/ /type/;
-- Define constant with type proof obligation
+define /name {implicit} args/ /body/ /type/;
+- Define constant, creates typing proof obligation
+- args can include {x} for implicit args (auto-inserted as evars when used)
 - Ex: define /double x/ /x + x/ /nat -> nat/;
+- Ex: define /double_list {a} l/ /`append a l l/ /intersect i . forall (a:U i) . list a -> list a/;
 
-defineInd /{pervasive}/ /fn : pattern of | pat1 . body1 | pat2 . body2 .../ /type/;
-- Define inductive function on datatype
-- Ex: defineInd /{a}/ /reverse_ntc : list [a] -> list a of | nil . nil | cons x xs . append (reverse_ntc xs) (cons x nil)// intersect i . forall (a : U i) . list a -> list a/;
-
-definerec /name args/ /body/ /type/;
-- Define recursive function
+definerec /name {implicit} args/ /body/ /type/;
+- Define recursive function, creates unrolling reduction
+- Inside body, implicit args become explicit
 - Ex: definerec /length {a} l/ /list_case l 0 (fn h t . succ (length a t))/ /intersect i . forall (a:U i) . list a -> nat/;
 
-typedef /datatype args . U i of name : type = | C1 : T1 | C2 : T2 .../;
-- Define datatype with constructors
-- Ex: typedef /datatype intersect i . forall (a:U i) . U i of tree : nat -> type = | Empty : tree 0 | Node : forall n . a -> tree n/;
+definemutrecRaw /pervasive_args/ /fn1 args = body1 and fn2 args = body2 .../;
+- Mutually recursive definitions (only Raw version exists, must prove types later)
+- Ex: definemutrecRaw /x/ /snork1 y = if Nat.eqb y 0 then x else snork2 y and snork2 y = snork1 (y-1) * 2/;
 
-reductions /lhs1 --> rhs1 ; lhs2 --> rhs2 ; unrolling name/;
-- Install reduction rules
+typedef /datatype invisible_args . visible_args . universe of dt : indices = | C1 : T1 | C2 : T2 and .../;
+- Define datatype with constructors, auto-discharges typing obligations
+- invisible_args: intersect i . (bound by intersect in types/constructors)
+- visible_args: forall (x:A) . (bound by forall in types/constructors)
+- Creates: datatypes, constructors, dt_iter (iterator), dt_iter_joint, dt_skel (skeleton), dt_subterm, dt_strip
+- Ex: typedef /datatype intersect i . forall (a:U i) . U i of tree : nat -> type = | Empty : tree 0 | Node : forall n . a -> forest n -> tree (succ n) and forest : nat -> type = | Nil : forest 0 | Cons : forall m n . tree m -> forest n -> forest (m+n)/;
+
+defineInd /{pervasive}/ /fn : dtconst [pervasive] indices -> result of | C1 pat1 . body1 | C2 pat2 . body2 and .../  /type1 and type2 .../;
+- Define inductive function on datatype using pattern matching (sugar for iterator call)
+- pervasive in [...] are visible pervasive args, can use _ for indices
+- Must cover all constructors (can use wildcard _), need not cover all datatypes in bundle
+- Ex: defineInd /{a}/ /reverse_ntc : list [a] -> list a of | nil . nil | cons x xs . append (reverse_ntc xs) (cons x nil)// intersect i . forall (a:U i) . list a -> list a/;
+- Ex: defineInd /{a}/ /treesize : tree [a] _ -> nat of | Empty . 0 | Node _ x f . succ (forestsize f) and forestsize : forest _ -> nat of | Nil . 0 | Cons _ _ t f . treesize t + forestsize f// intersect i . forall (a:U i) n . tree a n -> nat and intersect i . forall (a:U i) n . forest a n -> nat/;
+
+reductions /lhs1 --> rhs1 ; lhs2 --> rhs2 ; unrolling name ; unfolding name/;
+- Install custom reduction rules for normalization engine
+- LHS syntax: no implicit args inserted, use _ for wildcards
+- unrolling: unroll once per path (avoid loops), LHS only
+- unfolding: unfold everywhere
 - Ex: reductions /length _ nil --> 0 ; length a (cons h t) --> succ (length a t) ; unrolling length/;
+
+NOTE: All definition commands have Raw versions (defineRaw, definerecRaw, typedefRaw) that skip typechecking. AVOID using Raw versions - they require manual type proofs and prohibit evars in body. AI agents should use standard versions that auto-typecheck.
 
 == IMPLICIT & INVISIBLE ARGUMENTS ==
 

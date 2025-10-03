@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { IstariMCPServer } from './mcp-server';
 import { startLSP } from './istari_lsp';
-import { mcpServer, setMcpServer, getCurrentIstari, getOrCreateIstariUI, setCurrentIstariUri, getIstariByUri, restartMcpServer } from './global';
+import { mcpServer, setMcpServer, getCurrentIstari, getOrCreateIstariUI, setCurrentIstariUri, getIstariByUri, restartMcpServer, startMcpServer, stopMcpServer } from './global';
 import * as IstariHelper from './istari_ui_helper';
 
 
@@ -16,32 +16,11 @@ function registerDoc(doc: vscode.TextDocument, editor: vscode.TextEditor | undef
 			ui.setEditor(editor);
 		}
 
-		// Auto-start MCP server if it doesn't exist yet
-		if (!mcpServer) {
-			startMcpServer();
-		}
+		// Note: MCP server is no longer auto-started
+		// Use the command palette to start it manually when needed
 	}
 }
 
-function startMcpServer() {
-	if (!mcpServer) {
-		// Start HTTP server for Claude Code integration
-		const port = vscode.workspace.getConfiguration().get<number>('istari.mcpPort') || 47821;
-		const newServer = new IstariMCPServer(port);
-		setMcpServer(newServer);
-
-		// Set active context if there's an active Istari document
-		// MCP server will automatically use global state, no need to set context
-
-		newServer.start().then(() => {
-			console.log(`Istari MCP HTTP server started on port ${port}`);
-			vscode.window.showInformationMessage(`Istari MCP server running on http://localhost:${port}`);
-		}).catch((error: any) => {
-			console.error(`Failed to start MCP server: ${error.message}`);
-			vscode.window.showErrorMessage(`Failed to start MCP server: ${error.message}`);
-		});
-	}
-}
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -281,22 +260,41 @@ export function activate(context: vscode.ExtensionContext) {
 	}));
 
 	// MCP Server
-	context.subscriptions.push(vscode.commands.registerCommand('istari.startMcpServer', () => {
+	context.subscriptions.push(vscode.commands.registerCommand('istari.startMcpServer', async () => {
 		if (!mcpServer) {
-			startMcpServer();
-			vscode.window.showInformationMessage('Istari MCP server started');
+			try {
+				await startMcpServer();
+				vscode.window.showInformationMessage('Istari MCP server started');
+			} catch (error: any) {
+				console.error(`Failed to start MCP server: ${error.message}`);
+				vscode.window.showErrorMessage(`Failed to start MCP server: ${error.message}`);
+			}
 		} else {
 			vscode.window.showInformationMessage('MCP server is already running');
 		}
 	}));
 
-	context.subscriptions.push(vscode.commands.registerCommand('istari.restartMcpServer', () => {
+	context.subscriptions.push(vscode.commands.registerCommand('istari.stopMcpServer', async () => {
 		if (mcpServer) {
-			restartMcpServer();
-			vscode.window.showInformationMessage('Istari MCP server restarted');
+			try {
+				await stopMcpServer();
+				vscode.window.showInformationMessage('Istari MCP server stopped');
+			} catch (error: any) {
+				console.error(`Failed to stop MCP server: ${error.message}`);
+				vscode.window.showErrorMessage(`Failed to stop MCP server: ${error.message}`);
+			}
 		} else {
-			startMcpServer();
-			vscode.window.showInformationMessage('Istari MCP server started (was not running)');
+			vscode.window.showInformationMessage('MCP server is not running');
+		}
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('istari.restartMcpServer', async () => {
+		try {
+			await restartMcpServer();
+			vscode.window.showInformationMessage('Istari MCP server restarted');
+		} catch (error: any) {
+			console.error(`Failed to restart MCP server: ${error.message}`);
+			vscode.window.showErrorMessage(`Failed to restart MCP server: ${error.message}`);
 		}
 	}));
 
@@ -306,19 +304,14 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage(
 			`This will run: ${command}`,
 			'Install', 'Cancel'
-		).then(selection => {
+		).then((selection) => {
 			if (selection === 'Install') {
-				// Start MCP server if not running
-				if (!mcpServer) {
-					startMcpServer();
-				}
-
 				// Execute the Claude MCP install command
 				const terminal = vscode.window.createTerminal('Claude MCP Install');
 				terminal.show();
 				terminal.sendText(command);
 
-				vscode.window.showInformationMessage('Claude MCP installation command executed. Check terminal for results.');
+				vscode.window.showInformationMessage('Claude MCP installation command executed. Make sure to start the MCP server first if not already running.');
 			}
 		});
 	}));

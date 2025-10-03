@@ -163,6 +163,14 @@
         "title": "Istari: Start MCP Server"
       },
       {
+        "command": "istari.stopMcpServer",
+        "title": "Istari: Stop MCP Server"
+      },
+      {
+        "command": "istari.restartMcpServer",
+        "title": "Istari: Restart MCP Server"
+      },
+      {
         "command": "istari.installClaudeMcp",
         "title": "Istari: Install Claude MCP (claude mcp add istari-vscode http://localhost:47821/mcp -s user -t http)"
       },

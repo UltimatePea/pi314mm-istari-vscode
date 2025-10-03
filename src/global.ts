@@ -84,19 +84,44 @@ export function setMcpServer(server: IstariMCPServer | undefined) {
     mcpServer = server;
 }
 
-export async function restartMcpServer() {
-    console.log('Restarting MCP server...');
+export async function startMcpServer(): Promise<void> {
+    if (!mcpServer) {
+        // Start HTTP server for Claude Code integration
+        const port = vscode.workspace.getConfiguration().get<number>('istari.mcpPort') || 47821;
+        const newServer = new IstariMCPServer(port);
 
-    // Stop current server if it exists
+        // Set active context if there's an active Istari document
+        // MCP server will automatically use global state, no need to set context
+
+        try {
+            await newServer.start();
+            // Only set the server variable after successful startup
+            setMcpServer(newServer);
+            console.log(`Istari MCP HTTP server started on port ${port}`);
+        } catch (error) {
+            // Don't set mcpServer if startup failed
+            console.error(`Failed to start MCP server: ${error}`);
+            throw error;
+        }
+    }
+}
+
+export async function stopMcpServer(): Promise<void> {
     if (mcpServer) {
         await mcpServer.stop();
-        mcpServer = undefined;
+        setMcpServer(undefined);
+        console.log('Istari MCP server stopped');
     }
+}
 
+export async function restartMcpServer(): Promise<void> {
+    console.log('Restarting MCP server...');
+    
+    // Stop current server if it exists
+    await stopMcpServer();
+    
     // Start new server
-    const newServer = new IstariMCPServer();
-    await newServer.start();
-    setMcpServer(newServer);
+    await startMcpServer();
 
     console.log('MCP server restarted successfully');
 }

@@ -328,11 +328,12 @@ export class IstariMCPServer {
   private async showCurrentGoals(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
     const result = await IstariHelper.showCurrentGoals(doc.ui);
+    const text = result.trim() === '' ? '(no goals)' : result;
     return {
       content: [
         {
           type: 'text',
-          text: result,
+          text: text,
         },
       ],
     };
@@ -341,11 +342,12 @@ export class IstariMCPServer {
   private async showCurrentGoalsVerbosely(documentId: number): Promise<any> {
     const doc = this.getDocumentById(documentId);
     const result = await IstariHelper.showCurrentGoalsVerbosely(doc.ui);
+    const text = result.trim() === '' ? '(no goals)' : result;
     return {
       content: [
         {
           type: 'text',
-          text: result,
+          text: text,
         },
       ],
     };

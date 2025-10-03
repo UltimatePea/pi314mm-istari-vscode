@@ -214,8 +214,8 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'list_documentation_paths',
-          description: 'List all available documentation file paths (markdown files only)',
+          name: 'list_detailed_documentation_paths',
+          description: 'List all available detailed documentation file paths (markdown files only). This provides access to in-depth documentation that is typically not needed for basic usage.',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -223,8 +223,8 @@ export class IstariMCPServer {
           },
         },
         {
-          name: 'get_documentation',
-          description: 'Get the content of a specific documentation file by path',
+          name: 'get_detailed_documentation',
+          description: 'Get the content of a specific detailed documentation file by path. This provides access to in-depth documentation that is typically not needed for basic usage.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -281,10 +281,10 @@ export class IstariMCPServer {
           case 'get_usage_guide':
             return await this.getUsageGuide();
 
-          case 'list_documentation_paths':
+          case 'list_detailed_documentation_paths':
             return await this.listDocumentationPaths();
 
-          case 'get_documentation':
+          case 'get_detailed_documentation':
             return await this.getDocumentation((args as any).path);
 
           default:
